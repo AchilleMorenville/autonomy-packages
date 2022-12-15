@@ -59,18 +59,6 @@ ament_target_dependencies(graph_optimization rclcpp std_msgs sensor_msgs geometr
 target_link_libraries(graph_optimization gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(slam_save_map_client src/slam_save_map_client.cpp)
-ament_target_dependencies(slam_save_map_client rclcpp autonomous_interfaces)
-
-add_executable(slam_start_client src/slam_start_client.cpp)
-ament_target_dependencies(slam_start_client rclcpp autonomous_interfaces)
-
-add_executable(slam_stop_client src/slam_stop_client.cpp)
-ament_target_dependencies(slam_stop_client rclcpp autonomous_interfaces)
-
-add_executable(slam_reset_client src/slam_reset_client.cpp)
-ament_target_dependencies(slam_reset_client rclcpp autonomous_interfaces)
-
 install(TARGETS
   feature_extraction
   graph_optimization
