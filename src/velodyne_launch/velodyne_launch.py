@@ -8,9 +8,11 @@ import launch_ros.actions
 
 def generate_launch_description():
 
-    with open("velodyne_params.yaml", 'r') as f:
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+
+    with open(f"{dir_path}/velodyne_params.yaml", 'r') as f:
         convert_params = yaml.safe_load(f)['velodyne_convert_node']['ros__parameters']
-    with open("velodyne_params.yaml", 'r') as f:
+    with open(f"{dir_path}/velodyne_params.yaml", 'r') as f:
         driver_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
 
     driver_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_driver')

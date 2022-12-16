@@ -42,7 +42,14 @@ class SpotOdometryPublisher(Node):
         # Create services
         self.srv_Connect = self.create_service(Trigger, "spot_driver/odometry/connect", self.connect_call_back)
 
+        self.connected_to_spot = False
+
     def connect_call_back(self, request, response):
+
+        if self.connected_to_spot:
+            response.success = True
+            response.message = ""
+            return response
 
         # Connect to Spot
         try:
@@ -71,6 +78,8 @@ class SpotOdometryPublisher(Node):
 
         timer_period = 1.0 / self.spot_odometry_frequency  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
+
+        self.connected_to_spot = True
 
         response.success = True
         response.message = ""
