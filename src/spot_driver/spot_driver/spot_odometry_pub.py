@@ -40,7 +40,7 @@ class SpotOdometryPublisher(Node):
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
         # Create services
-        self.srv_Connect = self.create_service(Trigger, "test", self.connect_call_back)
+        self.srv_Connect = self.create_service(Trigger, "spot_driver/odometry/connect", self.connect_call_back)
 
     def connect_call_back(self, request, response):
 
