@@ -8,6 +8,7 @@ from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 import std_msgs.msg as std_msgs
+from std_srvs.srv import Trigger
 from geometry_msgs.msg import TransformStamped
 from builtin_interfaces.msg import Time
 
@@ -19,46 +20,62 @@ from bosdyn.api import robot_state_pb2
 
 class SpotOdometryPublisher(Node):
 
-    def __init__(self, hostname, password):
+    def __init__(self):
         super().__init__('spot_odometry_publisher')
 
-        self.declare_parameter('spot_odometry_frequency', 100)
-        spot_odometry_frequency = self.get_parameter('spot_odometry_frequency').get_parameter_value().integer_value
+        self.declare_parameter('spot_odometry_frequency', 50)
+        self.spot_odometry_frequency = self.get_parameter('spot_odometry_frequency').get_parameter_value().integer_value
 
-        self.get_logger().info(f"spot_odometry_frequency param value : {spot_odometry_frequency}")
-
-
-        self.get_logger().info("Connecting...")
-
-        # Create and connect robot
-        self.sdk = create_standard_sdk('OdometryClient')
-        self.robot = self.sdk.create_robot(hostname)
-        self.robot.authenticate('user', password)
-        self.robot.sync_with_directory()
-        self.robot.time_sync.wait_for_sync()
-
-        self.get_logger().info(f"Time synced : {self.robot.time_sync.has_established_time_sync}")
-
-        self.get_logger().info(f"Clock skew : {self.robot.time_sync.get_robot_clock_skew()}")
-
-        self.get_logger().info(f"RobotTimeConverter : {self.robot.time_sync.get_robot_time_converter()}")
-
-        self.get_logger().info("Connected...")
-
-        # Ensure clients
-        self.point_cloud_client = self.robot.ensure_client('velodyne-point-cloud')
-        self.robot_state_client = self.robot.ensure_client(RobotStateClient.default_service_name)
+        self.declare_parameter('spot_ip', '192.168.80.3')
+        self.spot_ip = self.get_parameter('spot_ip').get_parameter_value().string_value
+        
+        self.declare_parameter('spot_username', 'user')
+        self.spot_username = self.get_parameter('spot_username').get_parameter_value().string_value
+        
+        self.declare_parameter('spot_password', 'upsa43jm7vnf')
+        self.spot_password = self.get_parameter('spot_password').get_parameter_value().string_value
 
         # Initialize the transform broadcasters
         self.tf_broadcaster = TransformBroadcaster(self)
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
+        # Create services
+        self.srv_Connect = self.create_service(Trigger, "test", self.connect_call_back)
+
+    def connect_call_back(self, request, response):
+
+        # Connect to Spot
+        try:
+
+            self.get_logger().info("Conntecting to Spot...")
+
+            self.sdk = create_standard_sdk('OdometryClient')
+            self.robot = self.sdk.create_robot(self.spot_ip)
+            self.robot.authenticate(self.spot_username, self.spot_password)
+            self.robot.sync_with_directory()
+            self.robot.time_sync.wait_for_sync()
+
+            self.get_logger().info("Connected to Spot")
+
+        except Exception as e:
+            response.success = False 
+            response.message = "Failed to connect to Spot. Verify spot ip, username and password and the network connection."
+            return response
+
+        # Ensure clients
+        self.point_cloud_client = self.robot.ensure_client('velodyne-point-cloud')
+        self.robot_state_client = self.robot.ensure_client(RobotStateClient.default_service_name)
+
         # Publish velodyne pose
         self.publish_body_tform_velodyne()
 
-        # Create a timed callback
-        timer_period = 1.0 / spot_odometry_frequency  # seconds
+        timer_period = 1.0 / self.spot_odometry_frequency  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
+
+        response.success = True
+        response.message = ""
+        return response
+
 
     def publish_body_tform_velodyne(self):
 
@@ -163,10 +180,9 @@ class SpotOdometryPublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    spot_odometry_publisher = SpotOdometryPublisher('192.168.80.3', 'upsa43jm7vnf')
+    spot_odometry_publisher = SpotOdometryPublisher()
 
     rclpy.spin(spot_odometry_publisher)
-
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)

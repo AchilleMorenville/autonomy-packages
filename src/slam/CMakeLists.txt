@@ -13,6 +13,7 @@ find_package(ament_cmake REQUIRED)
 
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
@@ -49,13 +50,13 @@ rosidl_get_typesupport_target(cpp_typesupport_target
 
 add_executable(feature_extraction src/feature_extraction.cpp src/utils.cpp)
 # target_link_libraries(feature_extraction ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
-ament_target_dependencies(feature_extraction rclcpp std_msgs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces)
+ament_target_dependencies(feature_extraction rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces)
 target_link_libraries(feature_extraction ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(feature_extraction ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 add_executable(graph_optimization src/graph_optimization.cpp src/optimization.cpp src/utils.cpp)
 # target_link_libraries(graph_optimization ${PCL_LIBRARIES} gtsam ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
-ament_target_dependencies(graph_optimization rclcpp std_msgs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM)
+ament_target_dependencies(graph_optimization rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM)
 target_link_libraries(graph_optimization gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 

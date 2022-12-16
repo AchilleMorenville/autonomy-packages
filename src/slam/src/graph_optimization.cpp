@@ -78,9 +78,9 @@ public:
     );
 
     srv_SaveMap = this->create_service<autonomous_interfaces::srv::SlamSaveMap>("slam/save_map", std::bind(&GraphOptimization::saveMap, this, std::placeholders::_1, std::placeholders::_2));
-    srv_Start = this->create_service<autonomous_interfaces::srv::SlamStart>("slam/start", std::bind(&GraphOptimization::startProcess, this, std::placeholders::_1, std::placeholders::_2));
-    srv_Stop = this->create_service<autonomous_interfaces::srv::SlamStop>("slam/stop", std::bind(&GraphOptimization::stopProcess, this, std::placeholders::_1, std::placeholders::_2));
-    srv_Reset = this->create_service<autonomous_interfaces::srv::SlamReset>("slam/reset", std::bind(&GraphOptimization::resetProcess, this, std::placeholders::_1, std::placeholders::_2));
+    srv_Start = this->create_service<std_srvs::srv::Trigger>("slam/start", std::bind(&GraphOptimization::startProcess, this, std::placeholders::_1, std::placeholders::_2));
+    srv_Stop = this->create_service<std_srvs::srv::Trigger>("slam/stop", std::bind(&GraphOptimization::stopProcess, this, std::placeholders::_1, std::placeholders::_2));
+    srv_Reset = this->create_service<std_srvs::srv::Trigger>("slam/reset", std::bind(&GraphOptimization::resetProcess, this, std::placeholders::_1, std::placeholders::_2));
 
     allocateMemory();
   }
@@ -184,9 +184,9 @@ private:
   rclcpp::Subscription<slam::msg::Cloud>::SharedPtr subscription_;
 
   rclcpp::Service<autonomous_interfaces::srv::SlamSaveMap>::SharedPtr srv_SaveMap;
-  rclcpp::Service<autonomous_interfaces::srv::SlamStart>::SharedPtr srv_Start;
-  rclcpp::Service<autonomous_interfaces::srv::SlamStop>::SharedPtr srv_Stop;
-  rclcpp::Service<autonomous_interfaces::srv::SlamReset>::SharedPtr srv_Reset;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Start;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Stop;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Reset;
 
   void allocateMemory() {
 
@@ -632,39 +632,43 @@ private:
     pcl::io::savePCDFileASCII(request->destination, *map);
 
     response->success = true;
+    response->message = std::string("");
 
     RCLCPP_INFO(this->get_logger(), "Map saved");
 
     return;
   }
 
-  void stopProcess(const std::shared_ptr<autonomous_interfaces::srv::SlamStop::Request> request, std::shared_ptr<autonomous_interfaces::srv::SlamStop::Response> response) {
+  void stopProcess(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
     process_stopped = true;
 
     rclcpp::Rate rate(0.5);
     rate.sleep();
     
-    // rclcpp::sleep_for(std::chrono::nanoseconds(2s).count());
+    // rclcpp::sleep_for(std::chrono::nanoseconds(2s));
 
     response->success = true;
+    response->message = std::string("");
 
     RCLCPP_INFO(this->get_logger(), "Process stopped");
 
     return;
   }
 
-  void startProcess(const std::shared_ptr<autonomous_interfaces::srv::SlamStart::Request> request, std::shared_ptr<autonomous_interfaces::srv::SlamStart::Response> response) {
+  void startProcess(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
     process_stopped = false;
     response->success = true;
+    response->message = std::string("");
 
     RCLCPP_INFO(this->get_logger(), "Process started");
 
     return;
   }
 
-  void resetProcess(const std::shared_ptr<autonomous_interfaces::srv::SlamReset::Request> request, std::shared_ptr<autonomous_interfaces::srv::SlamReset::Response> response) {
+  void resetProcess(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
     if (!process_stopped) {
       response->success = false;
+      response->message = std::string("Process must be stopped before bieng reset !");
       return;
     }
 
@@ -697,6 +701,7 @@ private:
     mtx.unlock();
 
     response->success = true;
+    response->message = std::string("");
 
     RCLCPP_INFO(this->get_logger(), "Process reset");
 

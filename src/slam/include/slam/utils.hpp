@@ -28,12 +28,10 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 #include "slam/msg/cloud.hpp"
 #include "autonomous_interfaces/srv/slam_save_map.hpp"
-#include "autonomous_interfaces/srv/slam_start.hpp"
-#include "autonomous_interfaces/srv/slam_stop.hpp"
-#include "autonomous_interfaces/srv/slam_reset.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

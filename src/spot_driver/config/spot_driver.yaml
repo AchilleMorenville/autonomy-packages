@@ -1,3 +1,6 @@
 /**:
   ros__parameters:
     spot_odometry_frequency: 50
+    spot_ip: "192.168.80.3"
+    spot_username: "user"
+    spot_password: "upsa43jm7vnf"
