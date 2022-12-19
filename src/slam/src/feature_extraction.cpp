@@ -242,13 +242,21 @@ private:
     start_point_time = current_cloud->points.front().time;
     end_point_time = current_cloud->points.back().time;
 
-    t_start = tf_buffer_->lookupTransform(
+    try {
+
+      t_start = tf_buffer_->lookupTransform(
             "vision", "velodyne",
             rclcpp::Time(current_start_time_cloud));
 
-    t_end = tf_buffer_->lookupTransform(
-            "vision", "velodyne",
-            rclcpp::Time(current_end_time_cloud));
+      t_end = tf_buffer_->lookupTransform(
+              "vision", "velodyne",
+              rclcpp::Time(current_end_time_cloud));
+
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
+      return false;
+    }
+
 
     rot_start = Eigen::Quaternionf(t_start.transform.rotation.w, t_start.transform.rotation.x, t_start.transform.rotation.y, t_start.transform.rotation.z);
     rot_end = Eigen::Quaternionf(t_end.transform.rotation.w, t_end.transform.rotation.x, t_end.transform.rotation.y, t_end.transform.rotation.z);
@@ -597,17 +605,25 @@ private:
 
     cloud_msg.header = current_cloud_msg_header;
 
-    geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform(
-            "vision", "velodyne",
-            rclcpp::Time(current_start_time_cloud));
+    // geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform(
+    //         "vision", "velodyne",
+    //         rclcpp::Time(current_start_time_cloud));
 
-    cloud_msg.initial_guess_x = t.transform.translation.x;
-    cloud_msg.initial_guess_y = t.transform.translation.y;
-    cloud_msg.initial_guess_z = t.transform.translation.z;
-    cloud_msg.initial_guess_rot_w = t.transform.rotation.w;
-    cloud_msg.initial_guess_rot_x = t.transform.rotation.x;
-    cloud_msg.initial_guess_rot_y = t.transform.rotation.y;
-    cloud_msg.initial_guess_rot_z = t.transform.rotation.z;
+    // cloud_msg.initial_guess_x = t.transform.translation.x;
+    // cloud_msg.initial_guess_y = t.transform.translation.y;
+    // cloud_msg.initial_guess_z = t.transform.translation.z;
+    // cloud_msg.initial_guess_rot_w = t.transform.rotation.w;
+    // cloud_msg.initial_guess_rot_x = t.transform.rotation.x;
+    // cloud_msg.initial_guess_rot_y = t.transform.rotation.y;
+    // cloud_msg.initial_guess_rot_z = t.transform.rotation.z;
+
+    cloud_msg.initial_guess_x = t_start.transform.translation.x;
+    cloud_msg.initial_guess_y = t_start.transform.translation.y;
+    cloud_msg.initial_guess_z = t_start.transform.translation.z;
+    cloud_msg.initial_guess_rot_w = t_start.transform.rotation.w;
+    cloud_msg.initial_guess_rot_x = t_start.transform.rotation.x;
+    cloud_msg.initial_guess_rot_y = t_start.transform.rotation.y;
+    cloud_msg.initial_guess_rot_z = t_start.transform.rotation.z;
 
     publisher_->publish(cloud_msg);
   }
