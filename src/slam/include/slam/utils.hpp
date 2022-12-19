@@ -46,6 +46,10 @@
 #include <pcl/filters/impl/filter.hpp> // for remove NaN ?
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/registration/icp.h>
+#include <pcl/octree/octree_search.h>
+#include <pcl/octree/octree_iterator.h>
+#include <pcl/pcl_base.h>
+
 
 struct PointXYZIRT {
 	PCL_ADD_POINT4D
@@ -92,5 +96,7 @@ Eigen::Vector3f getAnglesFromMatrix(Eigen::Matrix3f rot);
 Eigen::Matrix3f getMatrixFromAngles(Eigen::Vector3f angles);
 
 Eigen::Matrix4f getMatrixFromTransform(float transform[6]);
+
+void octreeVoxelGrid(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_out, float resolution);
 
 #endif

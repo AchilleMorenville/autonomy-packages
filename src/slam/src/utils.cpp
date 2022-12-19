@@ -64,3 +64,28 @@ Eigen::Matrix4f getMatrixFromTransform(float transform[6]) {
 
   return m;
 }
+
+void octreeVoxelGrid(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_out, float resolution) {
+  
+  pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_leaf;
+  voxel_grid_leaf.setLeafSize(resolution, resolution, resolution);
+
+  float octree_resolution = 8.0f;
+  pcl::octree::OctreePointCloudSearch<pcl::PointXYZI> octree(octree_resolution);
+  octree.setInputCloud(cloud_in);
+  octree.addPointsFromInputCloud();
+
+  for (auto it = octree.leaf_breadth_begin(); it != octree.leaf_breadth_end(); ++it) {
+
+    pcl::IndicesPtr indexVector(new std::vector<int>);
+    pcl::octree::OctreeContainerPointIndices& container = it.getLeafContainer();
+    container.getPointIndices(*indexVector);
+
+    pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_leaf(new pcl::PointCloud<pcl::PointXYZI>);
+    voxel_grid_leaf.setInputCloud(cloud_in);
+    voxel_grid_leaf.setIndices(indexVector);
+    voxel_grid_leaf.filter(*filtered_leaf);
+    *cloud_out += *filtered_leaf;
+  }
+
+}

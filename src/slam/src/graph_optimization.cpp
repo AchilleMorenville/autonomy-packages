@@ -624,12 +624,16 @@ private:
 
     float resolution = request->resolution;
 
-    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_map;
-    voxel_grid_map.setLeafSize(resolution, resolution, resolution);
-    voxel_grid_map.setInputCloud(map);
-    voxel_grid_map.filter(*map);
+    // pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_map;
+    // voxel_grid_map.setLeafSize(resolution, resolution, resolution);
+    // voxel_grid_map.setInputCloud(map);
+    // voxel_grid_map.filter(*map);
 
-    pcl::io::savePCDFileASCII(request->destination, *map);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr output_map(new pcl::PointCloud<pcl::PointXYZI>);
+
+    octreeVoxelGrid(map, output_map, resolution);
+
+    pcl::io::savePCDFileASCII(request->destination, *output_map);
 
     response->success = true;
     response->message = std::string("");
