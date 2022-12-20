@@ -230,6 +230,8 @@ private:
       return;
     }
 
+    RCLCPP_INFO(this->get_logger(), "Point cloud received");
+
     // Save input
 
     pcl::fromROSMsg(cloud_msg->cloud_deskewed, *input_all_points);
@@ -333,6 +335,8 @@ private:
 
     if (poses_3D->points.empty() == true) { // There is no key frame saved
 
+      RCLCPP_INFO(this->get_logger(), "Save initial keyframe");
+
       graph.add(gtsam::PriorFactor<gtsam::Pose3>(0, gtsam::Pose3(optimized_pose_6D.cast<double>()), prior_noise));
 
       initial_estimate.insert(0, gtsam::Pose3(optimized_pose_6D.cast<double>()));
@@ -379,6 +383,8 @@ private:
       if (std::abs(yaw) < rad_new_key_frame && std::abs(pitch) < rad_new_key_frame && std::abs(roll) < rad_new_key_frame && x * x + y * y + z * z < dist_new_key_frame * dist_new_key_frame) { // Not enough displacement or rotation
         return;
       }
+
+      RCLCPP_INFO(this->get_logger(), "Save keyframe");
 
       gtsam::Pose3 pose_from = gtsam::Pose3(poses_6D[poses_6D.size() - 1].cast<double>());
 
