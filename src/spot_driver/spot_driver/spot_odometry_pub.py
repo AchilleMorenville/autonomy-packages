@@ -44,6 +44,8 @@ class SpotOdometryPublisher(Node):
 
         self.connected_to_spot = False
 
+        self.get_logger().info("Ready")
+
     def connect_call_back(self, request, response):
 
         if self.connected_to_spot:
@@ -116,6 +118,8 @@ class SpotOdometryPublisher(Node):
         self.tf_static_broadcaster.sendTransform(t)
 
     def timer_callback(self):
+
+        self.get_logger().info("Publishing odometry")
 
         # Request robot state proto from Spot
         robot_state = self.robot_state_client.get_robot_state()

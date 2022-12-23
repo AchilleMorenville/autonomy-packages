@@ -10,6 +10,10 @@ class SpotConnectClient(Node):
 
 		self.client_spot_driver_odometry_connect = self.create_client(Trigger, "spot_driver/odometry/connect")
 		self.client_spot_driver_fiducial_connect = self.create_client(Trigger, "spot_driver/fiducial/connect")
+		while not self.client_spot_driver_fiducial_connect.wait_for_service(timeout_sec=1.0):
+			self.get_logger().info('fiducial service not available')
+		while not self.client_spot_driver_odometry_connect.wait_for_service(timeout_sec=1.0):
+			self.get_logger().info('odometry service not available')
 
 	def send_request_spot_driver_connect(self):
 		req = Trigger.Request()
@@ -18,7 +22,7 @@ class SpotConnectClient(Node):
 		if future.result() is not None and future.result().success == True:
 			self.get_logger().info("Odometry connected to Spot")
 		else:
-			self.get_logger().info("Cann't connect Odometry to Spot")
+			self.get_logger().info("Can't connect Odometry to Spot")
 
 		req = Trigger.Request()
 		future = self.client_spot_driver_fiducial_connect.call_async(req)
@@ -26,7 +30,7 @@ class SpotConnectClient(Node):
 		if future.result() is not None and future.result().success == True:
 			self.get_logger().info("Fiducial connected to Spot")
 		else:
-			self.get_logger().info("Cann't connect Fiducial to Spot")
+			self.get_logger().info("Can't connect Fiducial to Spot")
 
 def main():
 	rclpy.init()
