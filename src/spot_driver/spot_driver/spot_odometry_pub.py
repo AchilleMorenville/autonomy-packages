@@ -153,7 +153,7 @@ class SpotOdometryPublisher(Node):
         ko = TransformStamped() # Kinematic Odometry
         vo = TransformStamped() # Visual Odometry
 
-        stamp = self.get_clock().now().to_msg()
+        # stamp = self.get_clock().now().to_msg()
 
         ko.header.stamp = stamp
         ko.header.frame_id = 'body'

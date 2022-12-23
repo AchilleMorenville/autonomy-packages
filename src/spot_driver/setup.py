@@ -24,7 +24,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'spot_odometry_pub = spot_driver.spot_odometry_pub:main'
+            'spot_odometry_pub = spot_driver.spot_odometry_pub:main',
+            'spot_fiducial_pub = spot_driver.spot_fiducial_pub:main',
+            'spot_connect_client = spot_driver.spot_connect_client:main',
+            'spot_fiducial_sub = spot_driver.spot_fiducial_sub:main'
         ],
     },
 )
