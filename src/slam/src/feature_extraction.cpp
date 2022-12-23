@@ -49,16 +49,16 @@ public:
 
     n = 0;
 
-    tf_buffer_ =
-      std::make_unique<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_ =
-      std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    // tf_buffer_ =
+    //   std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    // tf_listener_ =
+    //   std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
       "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1)
     );
 
-    publisher_ = this->create_publisher<slam::msg::Cloud>("slam/cloud", 10);
+    publisher_ = this->create_publisher<slam::msg::Cloud>("slam/feature_extraction/cloud", 10);
 
     allocateMemory();
 
@@ -100,7 +100,7 @@ private:
   pcl::PointCloud<pcl::PointXYZI>::Ptr flat_points;
 
   pcl::PointCloud<pcl::PointXYZI>::Ptr flat_points_scan;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr flat_points_scan_ds;
+  // pcl::PointCloud<pcl::PointXYZI>::Ptr flat_points_scan_ds;
 
   std_msgs::msg::Header current_cloud_msg_header;
 
@@ -115,32 +115,32 @@ private:
   std::vector<int> cloud_label;
   std::vector<int> cloud_neighbor_picked;
 
-  long current_start_time_cloud;
-  long current_end_time_cloud;
+  // long current_start_time_cloud;
+  // long current_end_time_cloud;
 
   float start_point_time;
   float end_point_time;
 
   cv::Mat mat_range;
 
-  geometry_msgs::msg::TransformStamped t_start;
-  geometry_msgs::msg::TransformStamped t_end;
+  // geometry_msgs::msg::TransformStamped t_start;
+  // geometry_msgs::msg::TransformStamped t_end;
 
-  Eigen::Quaternionf rot_diff;
-  Eigen::Quaternionf rot_base;
-  Eigen::Vector3f trans_diff;
+  // Eigen::Quaternionf rot_diff;
+  // Eigen::Quaternionf rot_base;
+  // Eigen::Vector3f trans_diff;
 
-  Eigen::Quaternionf rot_start;
-  Eigen::Quaternionf rot_end;
+  // Eigen::Quaternionf rot_start;
+  // Eigen::Quaternionf rot_end;
 
-  Eigen::Vector3f trans_start;
-  Eigen::Vector3f trans_end;
+  // Eigen::Vector3f trans_start;
+  // Eigen::Vector3f trans_end;
 
 
-  pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_flat;
+  // pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_flat;
 
   // Cloud msg cache
-  std::deque<sensor_msgs::msg::PointCloud2> cloud_msg_cache;
+  // std::deque<sensor_msgs::msg::PointCloud2> cloud_msg_cache;
 
   // Subscriptions
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
@@ -148,8 +148,8 @@ private:
   rclcpp::Publisher<slam::msg::Cloud>::SharedPtr publisher_;
 
   // tf2
-  std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  // std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+  // std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
   void allocateMemory() {
     current_cloud.reset(new pcl::PointCloud<PointXYZIRT>());
@@ -159,7 +159,7 @@ private:
     edge_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
     flat_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
     flat_points_scan.reset(new pcl::PointCloud<pcl::PointXYZI>());
-    flat_points_scan_ds.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    // flat_points_scan_ds.reset(new pcl::PointCloud<pcl::PointXYZI>());
 
     start_ring_index.resize(16);
     end_ring_index.resize(16);
@@ -172,7 +172,7 @@ private:
     cloud_label.resize(16 * 1800);
     cloud_neighbor_picked.resize(16 * 1800);
 
-    voxel_grid_flat.setLeafSize(flat_leaf_size, flat_leaf_size, flat_leaf_size);
+    // voxel_grid_flat.setLeafSize(flat_leaf_size, flat_leaf_size, flat_leaf_size);
   }
 
   void resetCurrent() {
@@ -183,7 +183,7 @@ private:
     edge_points->clear();
     flat_points->clear();
     flat_points_scan->clear();
-    flat_points_scan_ds->clear();
+    // flat_points_scan_ds->clear();
 
     image_cloud->points.resize(16 * 1800);
 
@@ -215,77 +215,62 @@ private:
 
   bool cacheCloudMsg(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
 
-    ++n;
-    if (n <= 2) {  // TODO: Not useful but here the first cloud start before any odom. It just throws the new point clouds
-      return false;
-    }
-
-    /*
-    *  TODO: Check if this caching is usefull. The purpose is I think to have enough new odometry to be able to deskew it.
-    *        We usually don't need to know instantaneously the robot pose.
-    */
-    cloud_msg_cache.push_back(*cloud_msg);  // Cache the point cloud received
-    if ((int) cloud_msg_cache.size() <= cloud_msg_cache_size) {
-      return false;
-    }
-
-    current_cloud_msg = std::move(cloud_msg_cache.front());  // std::move allows to copy and tell that we don't need the orignial copy anymore
-    cloud_msg_cache.pop_front();
+    current_cloud_msg = *cloud_msg;
 
     pcl::moveFromROSMsg(current_cloud_msg, *current_cloud);
 
     current_cloud_msg_header = current_cloud_msg.header;
 
-    current_start_time_cloud = rclcpp::Time(current_cloud_msg_header.stamp).nanoseconds() + int(current_cloud->points.front().time * 1e9); // TODO: See if we need nanoseconds
-    current_end_time_cloud = rclcpp::Time(current_cloud_msg_header.stamp).nanoseconds() + int(current_cloud->points.back().time * 1e9);
+    // current_start_time_cloud = rclcpp::Time(current_cloud_msg_header.stamp).nanoseconds() + int(current_cloud->points.front().time * 1e9); // TODO: See if we need nanoseconds
+    // current_end_time_cloud = rclcpp::Time(current_cloud_msg_header.stamp).nanoseconds() + int(current_cloud->points.back().time * 1e9);
 
     start_point_time = current_cloud->points.front().time;
     end_point_time = current_cloud->points.back().time;
 
-    try {
+    // try {
 
-      t_start = tf_buffer_->lookupTransform(
-            "vision", "velodyne",
-            rclcpp::Time(current_start_time_cloud));
+    //   t_start = tf_buffer_->lookupTransform(
+    //         "vision", "velodyne",
+    //         rclcpp::Time(current_start_time_cloud));
 
-      t_end = tf_buffer_->lookupTransform(
-              "vision", "velodyne",
-              rclcpp::Time(current_end_time_cloud));
+    //   t_end = tf_buffer_->lookupTransform(
+    //           "vision", "velodyne",
+    //           rclcpp::Time(current_end_time_cloud));
 
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
-      return false;
-    }
+    // } catch (const tf2::TransformException & ex) {
+    //   RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
+    //   return false;
+    // }
 
 
-    rot_start = Eigen::Quaternionf(t_start.transform.rotation.w, t_start.transform.rotation.x, t_start.transform.rotation.y, t_start.transform.rotation.z);
-    rot_end = Eigen::Quaternionf(t_end.transform.rotation.w, t_end.transform.rotation.x, t_end.transform.rotation.y, t_end.transform.rotation.z);
+    // rot_start = Eigen::Quaternionf(t_start.transform.rotation.w, t_start.transform.rotation.x, t_start.transform.rotation.y, t_start.transform.rotation.z);
+    // rot_end = Eigen::Quaternionf(t_end.transform.rotation.w, t_end.transform.rotation.x, t_end.transform.rotation.y, t_end.transform.rotation.z);
 
-    trans_start = Eigen::Vector3f(t_start.transform.translation.x, t_start.transform.translation.y, t_start.transform.translation.z);
-    trans_end = Eigen::Vector3f(t_end.transform.translation.x, t_end.transform.translation.y, t_end.transform.translation.z);
+    // trans_start = Eigen::Vector3f(t_start.transform.translation.x, t_start.transform.translation.y, t_start.transform.translation.z);
+    // trans_end = Eigen::Vector3f(t_end.transform.translation.x, t_end.transform.translation.y, t_end.transform.translation.z);
 
-    Eigen::Affine3f affine_start;
-    affine_start.translation() = trans_start;
-    affine_start.linear() = rot_start.toRotationMatrix();
+    // Eigen::Affine3f affine_start;
+    // affine_start.translation() = trans_start;
+    // affine_start.linear() = rot_start.toRotationMatrix();
 
-    Eigen::Affine3f affine_end;
-    affine_end.translation() = trans_end;
-    affine_end.linear() = rot_end.toRotationMatrix();
+    // Eigen::Affine3f affine_end;
+    // affine_end.translation() = trans_end;
+    // affine_end.linear() = rot_end.toRotationMatrix();
 
-    Eigen::Affine3f affine_diff = affine_start.inverse() * affine_end;
+    // Eigen::Affine3f affine_diff = affine_start.inverse() * affine_end;
 
-    rot_diff = affine_diff.linear();
+    // rot_diff = affine_diff.linear();
 
-    trans_diff = affine_diff.translation();
+    // trans_diff = affine_diff.translation();
 
-    Eigen::Vector3f v_diff = trans_diff / 0.1;
+    // Eigen::Vector3f v_diff = trans_diff / 0.1;
 
-    float speed = v_diff.norm();
+    // float speed = v_diff.norm();
 
-    RCLCPP_INFO(this->get_logger(), "Speed : %f", speed);
+    // RCLCPP_INFO(this->get_logger(), "Speed : %f", speed);
 
-    Eigen::Matrix3f base_rot_matrix = Eigen::Matrix3f::Identity();
-    rot_base = Eigen::Quaternionf(base_rot_matrix);
+    // Eigen::Matrix3f base_rot_matrix = Eigen::Matrix3f::Identity();
+    // rot_base = Eigen::Quaternionf(base_rot_matrix);
 
     std::vector<int> indices;
     pcl::removeNaNFromPointCloud(*current_cloud, *current_cloud, indices); // needed the include <pcl/filters/impl/filter.hpp>
@@ -302,7 +287,7 @@ private:
       point.x = current_cloud->points[i].x;
       point.y = current_cloud->points[i].y;
       point.z = current_cloud->points[i].z;
-      point.intensity = current_cloud->points[i].intensity;
+      point.intensity = current_cloud->points[i].time;
 
       float range = std::sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
       
@@ -337,61 +322,69 @@ private:
         continue;
       }
 
-      deskewPoint(point, current_cloud->points[i].time);
+      // deskewPoint(point, current_cloud->points[i].time);
+
+      // Compute start and end point time
+      if (point.intensity < start_point_time) {
+        start_point_time = point.intensity;
+      }
+      if (point.intensity > end_point_time) {
+        end_point_time = point.intensity;
+      }
 
       mat_range.at<float>(row_id, column_id) = range;
       image_cloud->points[column_id + row_id * 1800] = point;
     }
   }
 
-  void deskewPoint(pcl::PointXYZI & p, float point_time) {  // TODO: change this maybe
+  // void deskewPoint(pcl::PointXYZI & p, float point_time) {  // TODO: change this maybe
 
-    // long current_point_time = current_start_time_cloud + int((point_time - start_point_time) * 1e9);
+  //   // long current_point_time = current_start_time_cloud + int((point_time - start_point_time) * 1e9);
 
-    // geometry_msgs::msg::TransformStamped t;
-    // t = tf_buffer_->lookupTransform(
-    //         "odom", "velodyne",
-    //         rclcpp::Time(current_point_time));
+  //   // geometry_msgs::msg::TransformStamped t;
+  //   // t = tf_buffer_->lookupTransform(
+  //   //         "odom", "velodyne",
+  //   //         rclcpp::Time(current_point_time));
 
-    // Eigen::Quaternionf rot_point = Eigen::Quaternionf(t_start.transform.rotation.w, t_start.transform.rotation.x, t_start.transform.rotation.y, t_start.transform.rotation.z);
+  //   // Eigen::Quaternionf rot_point = Eigen::Quaternionf(t_start.transform.rotation.w, t_start.transform.rotation.x, t_start.transform.rotation.y, t_start.transform.rotation.z);
 
-    // Eigen::Vector3f trans_point = Eigen::Vector3f(t_start.transform.translation.x, t_start.transform.translation.y, t_start.transform.translation.z);
+  //   // Eigen::Vector3f trans_point = Eigen::Vector3f(t_start.transform.translation.x, t_start.transform.translation.y, t_start.transform.translation.z);
 
-    // Eigen::Affine3f affine_point;
-    // affine_point.translation() = trans_point;
-    // affine_point.linear() = rot_point.toRotationMatrix();
+  //   // Eigen::Affine3f affine_point;
+  //   // affine_point.translation() = trans_point;
+  //   // affine_point.linear() = rot_point.toRotationMatrix();
 
-    // Eigen::Affine3f affine_start;
-    // affine_start.translation() = trans_start;
-    // affine_start.linear() = rot_start.toRotationMatrix();
+  //   // Eigen::Affine3f affine_start;
+  //   // affine_start.translation() = trans_start;
+  //   // affine_start.linear() = rot_start.toRotationMatrix();
 
-    // Eigen::Vector3f vec_point(p.x, p.y, p.z);
-    // Eigen::Vector3f vec_point_orig(p.x, p.y, p.z);
-    // vec_point = ( affine_start.inverse() * affine_point ) * vec_point;
+  //   // Eigen::Vector3f vec_point(p.x, p.y, p.z);
+  //   // Eigen::Vector3f vec_point_orig(p.x, p.y, p.z);
+  //   // vec_point = ( affine_start.inverse() * affine_point ) * vec_point;
 
-    // RCLCPP_INFO(this->get_logger(), "Correction : %f, %f, %f", vec_point(0) - vec_point_orig(0), vec_point(1) - vec_point_orig(1), vec_point(2) - vec_point_orig(2));
+  //   // RCLCPP_INFO(this->get_logger(), "Correction : %f, %f, %f", vec_point(0) - vec_point_orig(0), vec_point(1) - vec_point_orig(1), vec_point(2) - vec_point_orig(2));
 
-    float alpha = (point_time - start_point_time) / (end_point_time - start_point_time);
+  //   float alpha = (point_time - start_point_time) / (end_point_time - start_point_time);
 
-    Eigen::Affine3f affine_correction;
-    affine_correction.translation() = (1.0 - alpha) * trans_start + alpha * trans_end;
-    affine_correction.linear() = rot_start.slerp(alpha, rot_end).toRotationMatrix();
-    // Eigen::Matrix4f trans_correction = affine_correction.inverse().matrix();
+  //   Eigen::Affine3f affine_correction;
+  //   affine_correction.translation() = (1.0 - alpha) * trans_start + alpha * trans_end;
+  //   affine_correction.linear() = rot_start.slerp(alpha, rot_end).toRotationMatrix();
+  //   // Eigen::Matrix4f trans_correction = affine_correction.inverse().matrix();
 
-    Eigen::Affine3f affine_start;
-    affine_start.translation() = trans_start;
-    affine_start.linear() = rot_start.toRotationMatrix();
+  //   Eigen::Affine3f affine_start;
+  //   affine_start.translation() = trans_start;
+  //   affine_start.linear() = rot_start.toRotationMatrix();
 
-    Eigen::Vector3f vec_point(p.x, p.y, p.z);
-    Eigen::Vector3f vec_point_orig(p.x, p.y, p.z);
-    vec_point = ( affine_start.inverse() * affine_correction ) * vec_point;
+  //   Eigen::Vector3f vec_point(p.x, p.y, p.z);
+  //   Eigen::Vector3f vec_point_orig(p.x, p.y, p.z);
+  //   vec_point = ( affine_start.inverse() * affine_correction ) * vec_point;
 
-    // RCLCPP_INFO(this->get_logger(), "Correction : %f, %f, %f", vec_point(0) - vec_point_orig(0), vec_point(1) - vec_point_orig(1), vec_point(2) - vec_point_orig(2));
+  //   // RCLCPP_INFO(this->get_logger(), "Correction : %f, %f, %f", vec_point(0) - vec_point_orig(0), vec_point(1) - vec_point_orig(1), vec_point(2) - vec_point_orig(2));
 
-    p.x = vec_point(0);
-    p.y = vec_point(1);
-    p.z = vec_point(2);
-  }
+  //   p.x = vec_point(0);
+  //   p.y = vec_point(1);
+  //   p.z = vec_point(2);
+  // }
 
   void organizeCloud() {
 
@@ -575,12 +568,14 @@ private:
           }
         }
 
-        flat_points_scan_ds->clear();
-        voxel_grid_flat.setInputCloud(flat_points_scan);
-        voxel_grid_flat.setLeafSize(0.1, 0.1, 0.1);
-        voxel_grid_flat.filter(*flat_points_scan_ds);
+        // flat_points_scan_ds->clear();
+        // voxel_grid_flat.setInputCloud(flat_points_scan);
+        // voxel_grid_flat.setLeafSize(0.1, 0.1, 0.1);
+        // voxel_grid_flat.filter(*flat_points_scan_ds);
 
-        *flat_points += *flat_points_scan_ds;
+        // *flat_points += *flat_points_scan_ds;
+
+        *flat_points += *flat_points_scan;
       }
     }
   }
@@ -597,33 +592,14 @@ private:
 
     slam::msg::Cloud cloud_msg;
 
-    cloud_msg.cloud_deskewed = temp_all_points;
+    cloud_msg.cloud_all = temp_all_points;
     cloud_msg.cloud_edge = temp_edge_points;
     cloud_msg.cloud_flat = temp_flat_points;
 
-    RCLCPP_INFO(this->get_logger(), "Size %d", cloud_msg.cloud_deskewed.width * cloud_msg.cloud_deskewed.height);
-
     cloud_msg.header = current_cloud_msg_header;
 
-    // geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform(
-    //         "vision", "velodyne",
-    //         rclcpp::Time(current_start_time_cloud));
-
-    // cloud_msg.initial_guess_x = t.transform.translation.x;
-    // cloud_msg.initial_guess_y = t.transform.translation.y;
-    // cloud_msg.initial_guess_z = t.transform.translation.z;
-    // cloud_msg.initial_guess_rot_w = t.transform.rotation.w;
-    // cloud_msg.initial_guess_rot_x = t.transform.rotation.x;
-    // cloud_msg.initial_guess_rot_y = t.transform.rotation.y;
-    // cloud_msg.initial_guess_rot_z = t.transform.rotation.z;
-
-    cloud_msg.initial_guess_x = t_start.transform.translation.x;
-    cloud_msg.initial_guess_y = t_start.transform.translation.y;
-    cloud_msg.initial_guess_z = t_start.transform.translation.z;
-    cloud_msg.initial_guess_rot_w = t_start.transform.rotation.w;
-    cloud_msg.initial_guess_rot_x = t_start.transform.rotation.x;
-    cloud_msg.initial_guess_rot_y = t_start.transform.rotation.y;
-    cloud_msg.initial_guess_rot_z = t_start.transform.rotation.z;
+    cloud_msg.start_point_time = start_point_time;
+    cloud_msg.end_point_time = end_point_time;
 
     publisher_->publish(cloud_msg);
   }

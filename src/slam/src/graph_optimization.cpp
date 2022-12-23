@@ -234,7 +234,7 @@ private:
 
     // Save input
 
-    pcl::fromROSMsg(cloud_msg->cloud_deskewed, *input_all_points);
+    pcl::fromROSMsg(cloud_msg->cloud_all, *input_all_points);
     pcl::fromROSMsg(cloud_msg->cloud_edge, *input_edge_points);
     pcl::fromROSMsg(cloud_msg->cloud_flat, *input_flat_points);
 
