@@ -13,6 +13,7 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
+#include <unordered_map>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>

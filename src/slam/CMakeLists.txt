@@ -60,9 +60,16 @@ ament_target_dependencies(graph_optimization rclcpp std_msgs std_srvs sensor_msg
 target_link_libraries(graph_optimization gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+add_executable(lidar_odometry src/lidar_odometry.cpp src/optimization.cpp src/utils.cpp)
+# target_link_libraries(graph_optimization ${PCL_LIBRARIES} gtsam ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+ament_target_dependencies(lidar_odometry rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM)
+target_link_libraries(lidar_odometry gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+# rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 install(TARGETS
   feature_extraction
   graph_optimization
+  lidar_odometry
   DESTINATION lib/${PROJECT_NAME}
 )
 
