@@ -13,7 +13,7 @@ from geometry_msgs.msg import TransformStamped
 from builtin_interfaces.msg import Time
 
 from bosdyn.client import create_standard_sdk
-from bosdyn.client.frame_helpers import get_a_tform_b, VISION_FRAME_NAME, ODOM_FRAME_NAME, BODY_FRAME_NAME
+from bosdyn.client.frame_helpers import get_a_tform_b, VISION_FRAME_NAME, ODOM_FRAME_NAME, BODY_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME
 from bosdyn.client.robot_state import RobotStateClient
 
 from bosdyn.api import robot_state_pb2
@@ -150,8 +150,16 @@ class SpotOdometryPublisher(Node):
             VISION_FRAME_NAME
         )
 
+        # Gravity
+        body_tform_gravity = get_a_tform_b(
+            transforms_snapshot,
+            BODY_FRAME_NAME,
+            GRAV_ALIGNED_BODY_FRAME_NAME
+        )
+
         ko = TransformStamped() # Kinematic Odometry
         vo = TransformStamped() # Visual Odometry
+        grav = TransformStamped()
 
         # stamp = self.get_clock().now().to_msg()
 
@@ -181,9 +189,23 @@ class SpotOdometryPublisher(Node):
         vo.transform.rotation.z = body_tform_vision.rot.z
         vo.transform.rotation.w = body_tform_vision.rot.w
 
+        grav.header.stamp = stamp
+        grav.header.frame_id = 'body'
+        grav.child_frame_id = 'gravity'
+
+        grav.transform.translation.x = body_tform_gravity.x
+        grav.transform.translation.y = body_tform_gravity.y
+        grav.transform.translation.z = body_tform_gravity.z
+
+        grav.transform.rotation.x = body_tform_gravity.rot.x
+        grav.transform.rotation.y = body_tform_gravity.rot.y
+        grav.transform.rotation.z = body_tform_gravity.rot.z
+        grav.transform.rotation.w = body_tform_gravity.rot.w
+
         # Send the transformation
         self.tf_broadcaster.sendTransform(ko)
         self.tf_broadcaster.sendTransform(vo)
+        self.tf_broadcaster.sendTransform(grav)
 
 
 def main(args=None):
