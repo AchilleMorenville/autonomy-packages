@@ -261,7 +261,7 @@ private:
       Eigen::Vector3f vec_point(point.x, point.y, point.z);
 
       Eigen::Quaternionf q_identity, q_displacement, q_final;
-      q_displacement = input_vision_displacement.block<3, 3>(0, 0).transpose();;
+      q_displacement = input_vision_displacement.block<3, 3>(0, 0).transpose();
       q_identity.setIdentity();
       q_final = q_identity.slerp(alpha, q_displacement);
 
