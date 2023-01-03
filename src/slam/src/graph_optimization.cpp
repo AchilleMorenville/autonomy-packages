@@ -4,6 +4,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/slam/BetweenFactor.h>
+#include <gtsam/navigation/AttitudeFactor.h>
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/nonlinear/Marginals.h>
@@ -23,7 +24,7 @@ public:
     // Loop
     loop_is_closed = false;
 
-    process_stopped = true;
+    process_stopped = false;
 
     // Graph
     gtsam::ISAM2Params parameters;
@@ -45,6 +46,8 @@ public:
         gtsam::noiseModel::mEstimator::Cauchy::Create(1), // optional: replacing Cauchy by DCS or GemanMcClure
         gtsam::noiseModel::Diagonal::Variances(robust_Vector6)
     );
+
+    gravity_noise = gtsam::noiseModel::Isotropic::Sigma(2, 1e-2);
 
     prior_noise = gtsam::noiseModel::Diagonal::Variances(prior_Vector6);
     odometry_noise = gtsam::noiseModel::Diagonal::Variances(odometry_Vector6);
@@ -82,7 +85,12 @@ public:
     srv_Stop = this->create_service<std_srvs::srv::Trigger>("slam/stop", std::bind(&GraphOptimization::stopProcess, this, std::placeholders::_1, std::placeholders::_2));
     srv_Reset = this->create_service<std_srvs::srv::Trigger>("slam/reset", std::bind(&GraphOptimization::resetProcess, this, std::placeholders::_1, std::placeholders::_2));
 
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
     allocateMemory();
+
+    // setStaticTf();
   }
 
   void loopClosureThread() {
@@ -120,10 +128,16 @@ private:
 
   float loop_closure_frequency;
 
+  Eigen::Matrix4f body_tform_lidar;
+  Eigen::Matrix4f lidar_tform_body;
+
   // Input
   pcl::PointCloud<pcl::PointXYZI>::Ptr input_all_points;
   pcl::PointCloud<pcl::PointXYZI>::Ptr input_edge_points;
   pcl::PointCloud<pcl::PointXYZI>::Ptr input_flat_points;
+
+  pcl::PointCloud<pcl::PointXYZI>::Ptr input_edge_points_ds;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr input_flat_points_ds;
 
   std_msgs::msg::Header input_header;
 
@@ -172,6 +186,8 @@ private:
   gtsam::noiseModel::Diagonal::shared_ptr constraint_noise;
   gtsam::noiseModel::Base::shared_ptr robust_noise;
 
+  gtsam::noiseModel::Isotropic::shared_ptr gravity_noise;
+
   // Loop
   bool loop_is_closed;
 
@@ -188,14 +204,25 @@ private:
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Stop;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Reset;
 
+  // tf2
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+
   void allocateMemory() {
 
     // Input
     input_all_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
     input_edge_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
+
+    input_edge_points_ds.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    input_flat_points_ds.reset(new pcl::PointCloud<pcl::PointXYZI>());
+
     input_flat_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
 
     input_robot_odometry = Eigen::Matrix4f::Identity();
+
+    body_tform_lidar = Eigen::Matrix4f::Identity();
+    lidar_tform_body = Eigen::Matrix4f::Identity();
 
     // VoxelGrids
     voxel_grid_flat.setLeafSize(flat_leaf_size, flat_leaf_size, flat_leaf_size);
@@ -224,13 +251,42 @@ private:
     optimized_pose_6D = Eigen::Matrix4f::Identity();
   }
 
+  void setStaticTf() {
+
+    bool found = false;
+
+    while (!found) {
+      try {
+        geometry_msgs::msg::TransformStamped t_body_velodyne = tf_buffer_->lookupTransform(
+              "body", "velodyne",
+              this->now(),
+              rclcpp::Duration::from_seconds(5.0));
+
+        Eigen::Quaternionf rot(t_body_velodyne.transform.rotation.w, t_body_velodyne.transform.rotation.x, t_body_velodyne.transform.rotation.y, t_body_velodyne.transform.rotation.z);
+
+        Eigen::Vector3f trans(t_body_velodyne.transform.translation.x, t_body_velodyne.transform.translation.y, t_body_velodyne.transform.translation.z);
+
+        Eigen::Affine3f affine;
+        affine.translation() = trans;
+        affine.linear() = rot.toRotationMatrix();
+
+        body_tform_lidar = affine.matrix();
+        lidar_tform_body = affine.inverse().matrix();
+
+        found = true;
+      } catch (const tf2::TransformException & ex) {
+        RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
+      }
+    }
+  }
+
   void cloudHandler(const slam::msg::Cloud::SharedPtr cloud_msg) {
 
     if (process_stopped) {
       return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "Point cloud received");
+    RCLCPP_INFO(this->get_logger(), "Point cloud received : %d", n);
 
     // Save input
 
@@ -249,10 +305,10 @@ private:
 
     // Down sample input clouds
     voxel_grid_edge.setInputCloud(input_edge_points);
-    voxel_grid_edge.filter(*input_edge_points);
+    voxel_grid_edge.filter(*input_edge_points_ds);
 
     voxel_grid_flat.setInputCloud(input_flat_points);
-    voxel_grid_flat.filter(*input_flat_points);
+    voxel_grid_flat.filter(*input_flat_points_ds);
 
     {
       std::lock_guard<std::mutex> lock(mtx);
@@ -261,7 +317,7 @@ private:
 
       optimizeFrame();
 
-      saveKeyFrameAndFactor();
+      saveKeyFrameAndFactors();
 
       updatePoses();
     }
@@ -317,8 +373,8 @@ private:
 
     optimized_pose_6D = optimize(
       estimated_pose_6D,
-      input_edge_points,
-      input_flat_points,
+      input_edge_points_ds,
+      input_flat_points_ds,
       local_map_edge_points,
       local_map_flat_points,
       kdtree_local_map_edge_points,
@@ -327,121 +383,246 @@ private:
     );
 
     estimated_displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
+    // last_robot_odometry = input_robot_odometry;
   }
 
-  void saveKeyFrameAndFactor() {
+  bool saveFrame() {
+
+    if (poses_3D->points.empty() == true) { // If it is the first frame then save it
+      return true;
+    }
+
+    // Compute the displacement
+    Eigen::Matrix4f displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
+
+    Eigen::Affine3f affine_displacement;
+    affine_displacement.matrix() = displacement;
+
+    float x, y, z, roll, pitch, yaw;
+    pcl::getTranslationAndEulerAngles(affine_displacement, x, y, z, roll, pitch, yaw);
+
+    if (std::abs(yaw) < rad_new_key_frame && std::abs(pitch) < rad_new_key_frame && std::abs(roll) < rad_new_key_frame && x * x + y * y + z * z < dist_new_key_frame * dist_new_key_frame) { // Not enough displacement or rotation
+      return false;
+    }
+
+    return true;
+  }
+
+  void addOdomFactor() {
+    if (poses_3D->points.empty() == true) { // If it is the first frame then save it
+      graph.add(gtsam::PriorFactor<gtsam::Pose3>(0, gtsam::Pose3(optimized_pose_6D.cast<double>()), prior_noise));
+      initial_estimate.insert(0, gtsam::Pose3(optimized_pose_6D.cast<double>()));
+    } else {
+      gtsam::Pose3 pose_from = gtsam::Pose3(poses_6D[poses_6D.size() - 1].cast<double>());
+      gtsam::Pose3 pose_to = gtsam::Pose3(optimized_pose_6D.cast<double>());
+      graph.add(gtsam::BetweenFactor<gtsam::Pose3>(poses_6D.size() - 1, poses_6D.size(), pose_from.between(pose_to), odometry_noise));
+      initial_estimate.insert(poses_6D.size(), gtsam::Pose3(optimized_pose_6D.cast<double>()));
+    } 
+  }
+
+  void addLoopFactor() {
+    if (loop_factors.size() > 0) {
+      for (int i = 0; i < (int) loop_factors.size(); i++) {
+        graph.add(loop_factors[i]);
+      }
+
+      loop_factors.clear();
+      loop_is_closed = true;
+    }
+  }
+
+  void addGravityFactor() {
+    try {
+
+      geometry_msgs::msg::TransformStamped t_lidar_gravity = tf_buffer_->lookupTransform(
+            "velodyne", "gravity",
+            input_header.stamp);
+
+      Eigen::Quaternionf rot(t_lidar_gravity.transform.rotation.w, t_lidar_gravity.transform.rotation.x, t_lidar_gravity.transform.rotation.y, t_lidar_gravity.transform.rotation.z);
+
+      Eigen::Vector3f vec_point(0.0, 0.0, -1.0);
+
+      vec_point = rot * vec_point;
+      vec_point = vec_point.normalized();
+
+      gtsam::Unit3 grav_direction(vec_point(0), vec_point(1), vec_point(2));
+
+      RCLCPP_INFO(this->get_logger(), "Gravity : %f, %f, %f", vec_point(0), vec_point(1), vec_point(2));
+
+      gtsam::Unit3 ref(0, 0, 1); // TODO: The robot must be up and flat to start. The alternative is to detect the gravity at startup and set that as the ref
+
+      graph.add(gtsam::Pose3AttitudeFactor(poses_6D.size(), ref, gravity_noise, grav_direction));
+
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
+    }
+  }
+
+  void saveKeyFrameAndFactors() {
 
     last_robot_odometry = input_robot_odometry;
 
-    if (poses_3D->points.empty() == true) { // There is no key frame saved
-
-      RCLCPP_INFO(this->get_logger(), "Save initial keyframe");
-
-      graph.add(gtsam::PriorFactor<gtsam::Pose3>(0, gtsam::Pose3(optimized_pose_6D.cast<double>()), prior_noise));
-
-      initial_estimate.insert(0, gtsam::Pose3(optimized_pose_6D.cast<double>()));
-
-      isam->update(graph, initial_estimate);
-      isam->update();
-
-      graph.resize(0);
-      initial_estimate.clear();
-
-      estimated_displacement = Eigen::Matrix4f::Identity();
-      poses_6D.push_back(optimized_pose_6D);
-
-      pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_edge_points(new pcl::PointCloud<pcl::PointXYZI>());
-      pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_flat_points(new pcl::PointCloud<pcl::PointXYZI>());
-      pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_all_points(new pcl::PointCloud<pcl::PointXYZI>());
-
-      pcl::copyPointCloud(*input_edge_points,  *copy_input_edge_points);
-      pcl::copyPointCloud(*input_flat_points,  *copy_input_flat_points);
-      pcl::copyPointCloud(*input_all_points,  *copy_input_all_points);
-
-      key_frames_edge_points.push_back(copy_input_edge_points);
-      key_frames_flat_points.push_back(copy_input_flat_points);
-      key_frames_all_points.push_back(copy_input_all_points);
-
-      pcl::PointXYZL point;
-      point.x = optimized_pose_6D(0, 3);
-      point.y = optimized_pose_6D(1, 3);
-      point.z = optimized_pose_6D(2, 3);
-      point.label = poses_3D->points.size();
-
-      poses_3D->push_back(point);
-
-    } else {
-
-      Eigen::Matrix4f displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
-
-      Eigen::Affine3f affine_displacement;
-      affine_displacement.matrix() = displacement;
-
-      float x, y, z, roll, pitch, yaw;
-      pcl::getTranslationAndEulerAngles(affine_displacement, x, y, z, roll, pitch, yaw);
-
-      if (std::abs(yaw) < rad_new_key_frame && std::abs(pitch) < rad_new_key_frame && std::abs(roll) < rad_new_key_frame && x * x + y * y + z * z < dist_new_key_frame * dist_new_key_frame) { // Not enough displacement or rotation
-        return;
-      }
-
-      RCLCPP_INFO(this->get_logger(), "Save keyframe");
-
-      gtsam::Pose3 pose_from = gtsam::Pose3(poses_6D[poses_6D.size() - 1].cast<double>());
-
-      gtsam::Pose3 pose_to = gtsam::Pose3(optimized_pose_6D.cast<double>());
-
-      graph.add(gtsam::BetweenFactor<gtsam::Pose3>(poses_6D.size() - 1, poses_6D.size(), pose_from.between(pose_to), odometry_noise));
-
-      if (loop_factors.size() > 0) {
-        for (int i = 0; i < (int) loop_factors.size(); i++) {
-          graph.add(loop_factors[i]);
-        }
-
-        loop_factors.clear();
-
-        loop_is_closed = true;
-      }
-
-      initial_estimate.insert(poses_6D.size(), gtsam::Pose3(optimized_pose_6D.cast<double>()));
-
-      isam->update(graph, initial_estimate);
-      isam->update();
-
-      if (loop_is_closed == true || true) {
-          isam->update();
-          isam->update();
-          isam->update();
-          isam->update();
-          isam->update();
-      }
-
-      graph.resize(0);
-      initial_estimate.clear();
-
-      estimated_displacement = Eigen::Matrix4f::Identity();
-      poses_6D.push_back(optimized_pose_6D);
-
-      pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_edge_points(new pcl::PointCloud<pcl::PointXYZI>());
-      pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_flat_points(new pcl::PointCloud<pcl::PointXYZI>());
-      pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_all_points(new pcl::PointCloud<pcl::PointXYZI>());
-
-      pcl::copyPointCloud(*input_edge_points,  *copy_input_edge_points);
-      pcl::copyPointCloud(*input_flat_points,  *copy_input_flat_points);
-      pcl::copyPointCloud(*input_all_points,  *copy_input_all_points);
-
-      key_frames_edge_points.push_back(copy_input_edge_points);
-      key_frames_flat_points.push_back(copy_input_flat_points);
-      key_frames_all_points.push_back(copy_input_all_points);
-
-      pcl::PointXYZL point;
-      point.x = optimized_pose_6D(0, 3);
-      point.y = optimized_pose_6D(1, 3);
-      point.z = optimized_pose_6D(2, 3);
-      point.label = poses_3D->points.size();
-
-      poses_3D->push_back(point);
+    if (saveFrame() == false) {
+      return;
     }
+
+    addOdomFactor();
+
+    addLoopFactor();
+
+    addGravityFactor();
+
+    isam->update(graph, initial_estimate);
+    isam->update();
+
+    if (loop_is_closed == true) {
+      isam->update();
+      isam->update();
+      isam->update();
+      isam->update();
+      isam->update();
+    }
+
+    graph.resize(0);
+    initial_estimate.clear();
+
+    estimated_displacement = Eigen::Matrix4f::Identity();
+    poses_6D.push_back(optimized_pose_6D);
+
+    pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_edge_points(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_flat_points(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_all_points(new pcl::PointCloud<pcl::PointXYZI>());
+
+    pcl::copyPointCloud(*input_edge_points,  *copy_input_edge_points);
+    pcl::copyPointCloud(*input_flat_points,  *copy_input_flat_points);
+    pcl::copyPointCloud(*input_all_points,  *copy_input_all_points);
+
+    key_frames_edge_points.push_back(copy_input_edge_points);
+    key_frames_flat_points.push_back(copy_input_flat_points);
+    key_frames_all_points.push_back(copy_input_all_points);
+
+    pcl::PointXYZL point;
+    point.x = optimized_pose_6D(0, 3);
+    point.y = optimized_pose_6D(1, 3);
+    point.z = optimized_pose_6D(2, 3);
+    point.label = poses_3D->points.size();
+
+    poses_3D->push_back(point);
   }
+
+  // void saveKeyFrameAndFactors() {
+
+  //   last_robot_odometry = input_robot_odometry;
+
+  //   if (poses_3D->points.empty() == true) { // There is no key frame saved
+
+  //     RCLCPP_INFO(this->get_logger(), "Save initial keyframe");
+
+  //     graph.add(gtsam::PriorFactor<gtsam::Pose3>(0, gtsam::Pose3(optimized_pose_6D.cast<double>()), prior_noise));
+
+  //     initial_estimate.insert(0, gtsam::Pose3(optimized_pose_6D.cast<double>()));
+
+  //     isam->update(graph, initial_estimate);
+  //     isam->update();
+
+  //     graph.resize(0);
+  //     initial_estimate.clear();
+
+  //     estimated_displacement = Eigen::Matrix4f::Identity();
+  //     poses_6D.push_back(optimized_pose_6D);
+
+  //     pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_edge_points(new pcl::PointCloud<pcl::PointXYZI>());
+  //     pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_flat_points(new pcl::PointCloud<pcl::PointXYZI>());
+  //     pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_all_points(new pcl::PointCloud<pcl::PointXYZI>());
+
+  //     pcl::copyPointCloud(*input_edge_points,  *copy_input_edge_points);
+  //     pcl::copyPointCloud(*input_flat_points,  *copy_input_flat_points);
+  //     pcl::copyPointCloud(*input_all_points,  *copy_input_all_points);
+
+  //     key_frames_edge_points.push_back(copy_input_edge_points);
+  //     key_frames_flat_points.push_back(copy_input_flat_points);
+  //     key_frames_all_points.push_back(copy_input_all_points);
+
+  //     pcl::PointXYZL point;
+  //     point.x = optimized_pose_6D(0, 3);
+  //     point.y = optimized_pose_6D(1, 3);
+  //     point.z = optimized_pose_6D(2, 3);
+  //     point.label = poses_3D->points.size();
+
+  //     poses_3D->push_back(point);
+
+  //   } else {
+
+  //     Eigen::Matrix4f displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
+
+  //     Eigen::Affine3f affine_displacement;
+  //     affine_displacement.matrix() = displacement;
+
+  //     float x, y, z, roll, pitch, yaw;
+  //     pcl::getTranslationAndEulerAngles(affine_displacement, x, y, z, roll, pitch, yaw);
+
+  //     if (std::abs(yaw) < rad_new_key_frame && std::abs(pitch) < rad_new_key_frame && std::abs(roll) < rad_new_key_frame && x * x + y * y + z * z < dist_new_key_frame * dist_new_key_frame) { // Not enough displacement or rotation
+  //       return;
+  //     }
+
+  //     RCLCPP_INFO(this->get_logger(), "Save keyframe");
+
+  //     gtsam::Pose3 pose_from = gtsam::Pose3(poses_6D[poses_6D.size() - 1].cast<double>());
+
+  //     gtsam::Pose3 pose_to = gtsam::Pose3(optimized_pose_6D.cast<double>());
+
+  //     graph.add(gtsam::BetweenFactor<gtsam::Pose3>(poses_6D.size() - 1, poses_6D.size(), pose_from.between(pose_to), odometry_noise));
+
+  //     if (loop_factors.size() > 0) {
+  //       for (int i = 0; i < (int) loop_factors.size(); i++) {
+  //         graph.add(loop_factors[i]);
+  //       }
+
+  //       loop_factors.clear();
+
+  //       loop_is_closed = true;
+  //     }
+
+  //     initial_estimate.insert(poses_6D.size(), gtsam::Pose3(optimized_pose_6D.cast<double>()));
+
+  //     isam->update(graph, initial_estimate);
+  //     isam->update();
+
+  //     if (loop_is_closed == true || true) {
+  //         isam->update();
+  //         isam->update();
+  //         isam->update();
+  //         isam->update();
+  //         isam->update();
+  //     }
+
+  //     graph.resize(0);
+  //     initial_estimate.clear();
+
+  //     estimated_displacement = Eigen::Matrix4f::Identity();
+  //     poses_6D.push_back(optimized_pose_6D);
+
+  //     pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_edge_points(new pcl::PointCloud<pcl::PointXYZI>());
+  //     pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_flat_points(new pcl::PointCloud<pcl::PointXYZI>());
+  //     pcl::PointCloud<pcl::PointXYZI>::Ptr copy_input_all_points(new pcl::PointCloud<pcl::PointXYZI>());
+
+  //     pcl::copyPointCloud(*input_edge_points,  *copy_input_edge_points);
+  //     pcl::copyPointCloud(*input_flat_points,  *copy_input_flat_points);
+  //     pcl::copyPointCloud(*input_all_points,  *copy_input_all_points);
+
+  //     key_frames_edge_points.push_back(copy_input_edge_points);
+  //     key_frames_flat_points.push_back(copy_input_flat_points);
+  //     key_frames_all_points.push_back(copy_input_all_points);
+
+  //     pcl::PointXYZL point;
+  //     point.x = optimized_pose_6D(0, 3);
+  //     point.y = optimized_pose_6D(1, 3);
+  //     point.z = optimized_pose_6D(2, 3);
+  //     point.label = poses_3D->points.size();
+
+  //     poses_3D->push_back(point);
+  //   }
+  // }
 
   void updatePoses() {
     if (loop_is_closed) {

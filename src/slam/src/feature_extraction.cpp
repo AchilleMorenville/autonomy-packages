@@ -215,6 +215,8 @@ private:
 
   bool cacheCloudMsg(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
 
+    RCLCPP_INFO(this->get_logger(), "Received cloud : %d", n);
+
     ++n;
     if (n <= 2) {  // TODO: Not useful but here the first cloud start before any odom. It just throws the new point clouds
       return false;
@@ -282,7 +284,7 @@ private:
 
     float speed = v_diff.norm();
 
-    RCLCPP_INFO(this->get_logger(), "Speed : %f", speed);
+    // RCLCPP_INFO(this->get_logger(), "Speed : %f", speed);
 
     Eigen::Matrix3f base_rot_matrix = Eigen::Matrix3f::Identity();
     rot_base = Eigen::Quaternionf(base_rot_matrix);
@@ -570,17 +572,19 @@ private:
         }
 
         for (int k = sp; k <= ep; ++k) {
-          if (cloud_label[k] <= 0) { // TODO : Experiment with the <= 0 ( < 0 instead ). Here I don't see why making the previous code if we select everything anyway. May need to remove the degenerate part.
+          if (cloud_label[k] < 0) { // TODO : Experiment with the <= 0 ( < 0 instead ). Here I don't see why making the previous code if we select everything anyway. May need to remove the degenerate part.
             flat_points_scan->push_back(organized_cloud->points[k]);
           }
         }
 
-        flat_points_scan_ds->clear();
-        voxel_grid_flat.setInputCloud(flat_points_scan);
-        voxel_grid_flat.setLeafSize(0.1, 0.1, 0.1);
-        voxel_grid_flat.filter(*flat_points_scan_ds);
+        // flat_points_scan_ds->clear();
+        // voxel_grid_flat.setInputCloud(flat_points_scan);
+        // voxel_grid_flat.setLeafSize(0.1, 0.1, 0.1);
+        // voxel_grid_flat.filter(*flat_points_scan_ds);
 
-        *flat_points += *flat_points_scan_ds;
+        // *flat_points += *flat_points_scan_ds;
+
+        *flat_points += *flat_points_scan;
       }
     }
   }
@@ -601,7 +605,7 @@ private:
     cloud_msg.cloud_edge = temp_edge_points;
     cloud_msg.cloud_flat = temp_flat_points;
 
-    RCLCPP_INFO(this->get_logger(), "Size %d", cloud_msg.cloud_deskewed.width * cloud_msg.cloud_deskewed.height);
+    // RCLCPP_INFO(this->get_logger(), "Size %d", cloud_msg.cloud_deskewed.width * cloud_msg.cloud_deskewed.height);
 
     cloud_msg.header = current_cloud_msg_header;
 
