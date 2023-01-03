@@ -23,7 +23,7 @@ public:
     // Loop
     loop_is_closed = false;
 
-    process_stopped = true;
+    process_stopped = false;
 
     // Graph
     gtsam::ISAM2Params parameters;
@@ -125,6 +125,9 @@ private:
   pcl::PointCloud<pcl::PointXYZI>::Ptr input_edge_points;
   pcl::PointCloud<pcl::PointXYZI>::Ptr input_flat_points;
 
+  pcl::PointCloud<pcl::PointXYZI>::Ptr input_edge_points_ds;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr input_flat_points_ds;
+
   std_msgs::msg::Header input_header;
 
   Eigen::Matrix4f input_robot_odometry;
@@ -193,6 +196,10 @@ private:
     // Input
     input_all_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
     input_edge_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
+
+    input_edge_points_ds.reset(new pcl::PointCloud<pcl::PointXYZI>());
+    input_flat_points_ds.reset(new pcl::PointCloud<pcl::PointXYZI>());
+
     input_flat_points.reset(new pcl::PointCloud<pcl::PointXYZI>());
 
     input_robot_odometry = Eigen::Matrix4f::Identity();
@@ -230,7 +237,7 @@ private:
       return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "Point cloud received");
+    RCLCPP_INFO(this->get_logger(), "Point cloud received : %d", n);
 
     // Save input
 
@@ -249,10 +256,10 @@ private:
 
     // Down sample input clouds
     voxel_grid_edge.setInputCloud(input_edge_points);
-    voxel_grid_edge.filter(*input_edge_points);
+    voxel_grid_edge.filter(*input_edge_points_ds);
 
     voxel_grid_flat.setInputCloud(input_flat_points);
-    voxel_grid_flat.filter(*input_flat_points);
+    voxel_grid_flat.filter(*input_flat_points_ds);
 
     {
       std::lock_guard<std::mutex> lock(mtx);
@@ -317,8 +324,8 @@ private:
 
     optimized_pose_6D = optimize(
       estimated_pose_6D,
-      input_edge_points,
-      input_flat_points,
+      input_edge_points_ds,
+      input_flat_points_ds,
       local_map_edge_points,
       local_map_flat_points,
       kdtree_local_map_edge_points,

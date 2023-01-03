@@ -60,9 +60,16 @@ ament_target_dependencies(graph_optimization rclcpp std_msgs std_srvs sensor_msg
 target_link_libraries(graph_optimization gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+add_executable(save_map src/save_map.cpp src/utils.cpp)
+# target_link_libraries(graph_optimization ${PCL_LIBRARIES} gtsam ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+ament_target_dependencies(save_map rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM)
+target_link_libraries(save_map gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+# rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 install(TARGETS
   feature_extraction
   graph_optimization
+  save_map
   DESTINATION lib/${PROJECT_NAME}
 )
 

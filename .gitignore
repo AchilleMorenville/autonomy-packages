@@ -4,6 +4,8 @@ build
 
 install
 
+cpp-test
+
 log
 
 **/__pycache__

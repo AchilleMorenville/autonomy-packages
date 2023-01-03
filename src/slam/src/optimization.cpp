@@ -204,7 +204,7 @@ void compute_edge_coeffs(
 
     kdtree_target_edge->nearestKSearch(point_transformed, 5, point_search_idx, point_search_sq_dist);
 
-    if (point_search_sq_dist[4] < 0.3) { // The last point is close enough
+    if (point_search_sq_dist[4] < 1.0) { // The last point is close enough
 
       float mean_x = 0;
       float mean_y = 0;
@@ -346,7 +346,7 @@ void compute_flat_coeffs(
     transformPoint(&(source_flat_points->points[i]), &point_transformed, transform);
     kdtree_target_flat->nearestKSearch(point_transformed, 5, point_search_idx, point_search_sq_dist);
 
-    if (point_search_sq_dist[4] < 0.3) {
+    if (point_search_sq_dist[4] < 1.0) {
 
       cv::Mat mat_A0 (5, 3, CV_32F, cv::Scalar::all(0));
       cv::Mat mat_B0 (5, 1, CV_32F, cv::Scalar::all(-1));
