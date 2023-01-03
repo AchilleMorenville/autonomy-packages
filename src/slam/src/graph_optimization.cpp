@@ -4,6 +4,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/slam/BetweenFactor.h>
+#include <gtsam/navigation/AttitudeFactor.h>
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/nonlinear/Marginals.h>
@@ -46,6 +47,8 @@ public:
         gtsam::noiseModel::Diagonal::Variances(robust_Vector6)
     );
 
+    gravity_noise = gtsam::noiseModel::Isotropic::Sigma(2, 1e-2);
+
     prior_noise = gtsam::noiseModel::Diagonal::Variances(prior_Vector6);
     odometry_noise = gtsam::noiseModel::Diagonal::Variances(odometry_Vector6);
 
@@ -87,7 +90,7 @@ public:
 
     allocateMemory();
 
-    setStaticTf();
+    // setStaticTf();
   }
 
   void loopClosureThread() {
@@ -183,6 +186,8 @@ private:
   gtsam::noiseModel::Diagonal::shared_ptr constraint_noise;
   gtsam::noiseModel::Base::shared_ptr robust_noise;
 
+  gtsam::noiseModel::Isotropic::shared_ptr gravity_noise;
+
   // Loop
   bool loop_is_closed;
 
@@ -254,7 +259,7 @@ private:
       try {
         geometry_msgs::msg::TransformStamped t_body_velodyne = tf_buffer_->lookupTransform(
               "body", "velodyne",
-              this->now(), 
+              this->now(),
               rclcpp::Duration::from_seconds(5.0));
 
         Eigen::Quaternionf rot(t_body_velodyne.transform.rotation.w, t_body_velodyne.transform.rotation.x, t_body_velodyne.transform.rotation.y, t_body_velodyne.transform.rotation.z);
@@ -378,7 +383,7 @@ private:
     );
 
     estimated_displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
-    last_robot_odometry = input_robot_odometry;
+    // last_robot_odometry = input_robot_odometry;
   }
 
   bool saveFrame() {
@@ -426,11 +431,36 @@ private:
     }
   }
 
-  // void addGravityFactor() {
+  void addGravityFactor() {
+    try {
 
-  // }
+      geometry_msgs::msg::TransformStamped t_lidar_gravity = tf_buffer_->lookupTransform(
+            "velodyne", "gravity",
+            input_header.stamp);
+
+      Eigen::Quaternionf rot(t_lidar_gravity.transform.rotation.w, t_lidar_gravity.transform.rotation.x, t_lidar_gravity.transform.rotation.y, t_lidar_gravity.transform.rotation.z);
+
+      Eigen::Vector3f vec_point(0.0, 0.0, -1.0);
+
+      vec_point = rot * vec_point;
+      vec_point = vec_point.normalized();
+
+      gtsam::Unit3 grav_direction(vec_point(0), vec_point(1), vec_point(2));
+
+      RCLCPP_INFO(this->get_logger(), "Gravity : %f, %f, %f", vec_point(0), vec_point(1), vec_point(2));
+
+      gtsam::Unit3 ref(0, 0, 1); // TODO: The robot must be up and flat to start. The alternative is to detect the gravity at startup and set that as the ref
+
+      graph.add(gtsam::Pose3AttitudeFactor(poses_6D.size(), ref, gravity_noise, grav_direction));
+
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
+    }
+  }
 
   void saveKeyFrameAndFactors() {
+
+    last_robot_odometry = input_robot_odometry;
 
     if (saveFrame() == false) {
       return;
@@ -440,7 +470,7 @@ private:
 
     addLoopFactor();
 
-    // addGravityFactor();
+    addGravityFactor();
 
     isam->update(graph, initial_estimate);
     isam->update();
