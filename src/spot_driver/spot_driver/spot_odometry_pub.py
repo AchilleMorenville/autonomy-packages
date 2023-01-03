@@ -167,6 +167,8 @@ class SpotOdometryPublisher(Node):
 
         # stamp = self.get_clock().now().to_msg()
 
+        self.get_logger().info(f"Stamp : {stamp}")
+
         ko.header.stamp = stamp
         ko.header.frame_id = 'body'
         ko.child_frame_id = 'odom'
