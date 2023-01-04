@@ -118,12 +118,15 @@ class SpotFiducialPublisher(Node):
             else:
                 self.last_detection[tag_id] = timestamp
 
-            stamp.sec = timestamp.seconds - self.robot.time_sync.get_robot_clock_skew().seconds
-            stamp.nanosec = timestamp.nanos - self.robot.time_sync.get_robot_clock_skew().nanos
+            sec = timestamp.seconds - self.robot.time_sync.get_robot_clock_skew().seconds
+            nanosec = timestamp.nanos - self.robot.time_sync.get_robot_clock_skew().nanos
 
-            if stamp.nanosec < 0:
-                stamp.nanosec = stamp.nanosec + 1000000000
-                stamp.sec = stamp.sec - 1
+            if nanosec < 0:
+                nanosec = nanosec + 1000000000
+                sec = sec - 1
+
+            stamp.sec = sec
+            stamp.nanosec = nanosec
 
             self.get_logger().info(f"Fiducial {tag_id} detected at {stamp.sec}.{stamp.nanosec} s")
 
