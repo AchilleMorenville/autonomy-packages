@@ -11,11 +11,17 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SlamSaveMap.srv"
-  "msg/Fiducials.msg")
+  "msg/Fiducials.msg"
+  "msg/Fiducial.msg"
+  DEPENDENCIES std_msgs geometry_msgs builtin_interfaces)
 
 
 if(BUILD_TESTING)
