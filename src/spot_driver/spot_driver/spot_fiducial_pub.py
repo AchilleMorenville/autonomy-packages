@@ -4,15 +4,15 @@ import time
 import rclpy
 from rclpy.node import Node
 
-from tf2_ros import TransformBroadcaster
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+# from tf2_ros import TransformBroadcaster
+# from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 import std_msgs.msg as std_msgs
 from std_srvs.srv import Trigger
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import Pose
 from builtin_interfaces.msg import Time
 
-from autonomous_interfaces.msg import Fiducials
+from autonomous_interfaces.msg import Fiducial, Fiducials
 
 from bosdyn.client import create_standard_sdk
 from bosdyn.client.frame_helpers import get_a_tform_b, VISION_FRAME_NAME, ODOM_FRAME_NAME, BODY_FRAME_NAME
@@ -27,7 +27,7 @@ class SpotFiducialPublisher(Node):
     def __init__(self):
         super().__init__('spot_fiducial_publisher')
 
-        self.declare_parameter('spot_fiducial_frequency', 50.0)
+        self.declare_parameter('spot_fiducial_frequency', 10.0)
         self.spot_fiducial_frequency = self.get_parameter('spot_fiducial_frequency').get_parameter_value().double_value
 
         self.declare_parameter('spot_ip', '192.168.80.3')
@@ -40,12 +40,14 @@ class SpotFiducialPublisher(Node):
         self.spot_password = self.get_parameter('spot_password').get_parameter_value().string_value
 
         # Initialize the transform broadcasters
-        self.tf_broadcaster = TransformBroadcaster(self)
+        # self.tf_broadcaster = TransformBroadcaster(self)
 
         # Create services
         self.srv_Connect = self.create_service(Trigger, "spot_driver/fiducial/connect", self.connect_call_back)
 
         self.connected_to_spot = False
+
+        self.last_detection = {}
 
     def connect_call_back(self, request, response):
 
@@ -79,7 +81,7 @@ class SpotFiducialPublisher(Node):
         timer_period = 1.0 / self.spot_fiducial_frequency  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
-        self.fiducials_publisher = self.create_publisher(Fiducials, 'spot_driver/fiducials', 10)
+        self.fiducials_publisher = self.create_publisher(Fiducials, "spot_driver/fiducials", 10)
 
         self.connected_to_spot = True
 
@@ -96,7 +98,7 @@ class SpotFiducialPublisher(Node):
 
         stamp = self.get_clock().now().to_msg()
 
-        ids_list = []
+        list_fiducials = []
 
         for world_object in world_objects:
 
@@ -104,15 +106,26 @@ class SpotFiducialPublisher(Node):
                 continue
 
             timestamp = world_object.acquisition_time
-            timestamp.seconds = timestamp.seconds - self.robot.time_sync.get_robot_clock_skew().seconds
-            timestamp.nanos = timestamp.nanos - self.robot.time_sync.get_robot_clock_skew().nanos
 
-            if timestamp.nanos < 0:
-                timestamp.nanos = timestamp.nanos + 1000000000
-                timestamp.seconds = timestamp.seconds - 1
+            tag_id = world_object.apriltag_properties.tag_id
 
-            stamp.sec = timestamp.seconds
-            stamp.nanosec = timestamp.nanos
+            # Sends only when new fiducial as been detected
+            if tag_id in self.last_detection:
+                if timestamp.seconds - self.last_detection[tag_id].seconds == 0 and timestamp.nanos - self.last_detection[tag_id].nanos < 100:
+                    continue
+                else:
+                    self.last_detection[tag_id] = timestamp
+            else:
+                self.last_detection[tag_id] = timestamp
+
+            stamp.sec = timestamp.seconds - self.robot.time_sync.get_robot_clock_skew().seconds
+            stamp.nanosec = timestamp.nanos - self.robot.time_sync.get_robot_clock_skew().nanos
+
+            if stamp.nanosec < 0:
+                stamp.nanosec = stamp.nanosec + 1000000000
+                stamp.sec = stamp.sec - 1
+
+            self.get_logger().info(f"Fiducial {tag_id} detected at {stamp.sec}.{stamp.nanosec} s")
 
             transforms_snapshot = world_object.transforms_snapshot
 
@@ -122,31 +135,30 @@ class SpotFiducialPublisher(Node):
                 world_object.apriltag_properties.frame_name_fiducial_filtered
             )
 
-            t_fiducial = TransformStamped()
+            fiducial = Fiducial()
 
-            t_fiducial.header.stamp = stamp
-            t_fiducial.header.frame_id = 'body'
-            t_fiducial.child_frame_id = f'fiducial_{world_object.apriltag_properties.tag_id}'
+            pose_fiducial = Pose()
 
-            t_fiducial.transform.translation.x = body_tform_fiducial.x
-            t_fiducial.transform.translation.y = body_tform_fiducial.y
-            t_fiducial.transform.translation.z = body_tform_fiducial.z
+            pose_fiducial.position.x = body_tform_fiducial.x
+            pose_fiducial.position.y = body_tform_fiducial.y
+            pose_fiducial.position.z = body_tform_fiducial.z
 
-            t_fiducial.transform.rotation.x = body_tform_fiducial.rot.x
-            t_fiducial.transform.rotation.y = body_tform_fiducial.rot.y
-            t_fiducial.transform.rotation.z = body_tform_fiducial.rot.z
-            t_fiducial.transform.rotation.w = body_tform_fiducial.rot.w
+            pose_fiducial.orientation.x = body_tform_fiducial.rot.x
+            pose_fiducial.orientation.y = body_tform_fiducial.rot.y
+            pose_fiducial.orientation.z = body_tform_fiducial.rot.z
+            pose_fiducial.orientation.w = body_tform_fiducial.rot.w
 
-            # Send the transformation
-            self.tf_broadcaster.sendTransform(t_fiducial)
+            fiducial.tag_id = tag_id
+            fiducial.stamp = stamp
+            fiducial.pose = pose_fiducial
 
-            ids_list.append(world_object.apriltag_properties.tag_id)
+            list_fiducials.append(fiducial)
 
-        msg = Fiducials()
-        msg.length = len(ids_list)
-        msg.ids = ids_list
-        self.fiducials_publisher.publish(msg)
-        self.get_logger().info(f"Publishing fiducial's ids list : {ids_list}")
+        if len(list_fiducials) > 0:
+            msg = Fiducials()
+            msg.nbr = len(list_fiducials)
+            msg.fiducials = list_fiducials
+            self.fiducials_publisher.publish(msg)
 
 
 def main(args=None):

@@ -21,5 +21,10 @@ def generate_launch_description():
             parameters=[
                 config
             ]
+        ),
+        Node(
+            package='spot_driver',
+            executable='spot_fiducial_pub',
+            name='spot_fiducial_pub'
         )
     ])
