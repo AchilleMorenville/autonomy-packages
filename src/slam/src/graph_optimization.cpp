@@ -27,7 +27,7 @@ public:
     // Loop
     loop_is_closed = false;
 
-    process_stopped = false;
+    process_stopped = true;
 
     // Graph
     gtsam::ISAM2Params parameters;
