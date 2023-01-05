@@ -27,6 +27,10 @@ public:
     // Loop
     loop_is_closed = false;
 
+    gravity_added = false;
+
+    fiducial_added = false;
+
     process_stopped = true;
 
     // Graph
@@ -126,6 +130,9 @@ private:
   int n;
 
   bool process_stopped;
+
+  bool fiducial_added;
+  bool gravity_added;
 
   int start_idx;
 
@@ -497,6 +504,8 @@ private:
 
       graph.add(gtsam::Pose3AttitudeFactor(gtsam::Symbol('x', (int) poses_6D.size()), ref, gravity_noise, grav_direction));
 
+      gravity_added = true;
+
     } catch (const tf2::TransformException & ex) {
       RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
     }
@@ -609,7 +618,8 @@ private:
         if (it_set == key_frames_tag_ids[best_idx].end()) {
           key_frames_tag_ids[best_idx].insert(fiducials_queue.front().fiducials[i].tag_id);
           graph.add(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::Symbol('x', best_idx), gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_between.cast<double>()), fiducial_noise));
-           RCLCPP_INFO(this->get_logger(), "\033[1;32m Link keyframe %d (max %d) to fiducial %d \033[0m", best_idx, (int) poses_3D->points.size(), fiducials_queue.front().fiducials[i].tag_id);
+          RCLCPP_INFO(this->get_logger(), "\033[1;32m Link keyframe %d (max %d) to fiducial %d \033[0m", best_idx, (int) poses_3D->points.size(), fiducials_queue.front().fiducials[i].tag_id);
+          fiducial_added = true;
         }
         // graph.add(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::Symbol('x', best_idx), gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_between.cast<double>()), fiducial_noise));
       }
@@ -638,7 +648,7 @@ private:
     isam->update(graph, initial_estimate);
     isam->update();
 
-    if (loop_is_closed == true) {
+    if (loop_is_closed == true || fiducial_added == true || gravity_added == true) {
       isam->update();
       isam->update();
       isam->update();
@@ -789,7 +799,7 @@ private:
   // }
 
   void updatePoses() {
-    if (loop_is_closed || true) {
+    if (loop_is_closed || fiducial_added || gravity_added) {
       isam_current_estimate = isam->calculateEstimate();
 
       for (int i = 0; i < (int) poses_3D->points.size(); i++) {
@@ -804,6 +814,8 @@ private:
       }
 
       loop_is_closed = false;
+      fiducial_added = false;
+      gravity_added = false;
     }
   }
 
