@@ -13,6 +13,8 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
+#include <unordered_set>
+#include <unordered_map>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -27,11 +29,14 @@
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <geometry_msgs/msg/pose.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
 #include "slam/msg/cloud.hpp"
 #include "autonomous_interfaces/srv/slam_save_map.hpp"
+#include "autonomous_interfaces/msg/fiducials.hpp"
+#include "autonomous_interfaces/msg/fiducial.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -86,6 +91,10 @@ public:
 private:
   std::chrono::time_point<std::chrono::high_resolution_clock> start_time_point;
 };
+
+Eigen::Matrix4f transformStampedToMatrix(geometry_msgs::msg::TransformStamped t);
+
+Eigen::Matrix4f poseToMatrix(geometry_msgs::msg::Pose pose);
 
 Eigen::Matrix4f inverseTransformation(Eigen::Matrix4f m);
 

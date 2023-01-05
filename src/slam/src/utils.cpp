@@ -1,5 +1,27 @@
 #include "utils.hpp"
 
+Eigen::Matrix4f transformStampedToMatrix(geometry_msgs::msg::TransformStamped t) {
+  Eigen::Matrix4f matrix;
+  Eigen::Quaternionf rot(t.transform.rotation.w, t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z);
+  Eigen::Vector3f trans(t.transform.translation.x, t.transform.translation.y, t.transform.translation.z);
+  Eigen::Affine3f affine;
+  affine.translation() = trans;
+  affine.linear() = rot.toRotationMatrix();
+  matrix = affine.matrix();
+  return matrix;
+}
+
+Eigen::Matrix4f poseToMatrix(geometry_msgs::msg::Pose pose) {
+  Eigen::Matrix4f matrix;
+  Eigen::Quaternionf rot(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
+  Eigen::Vector3f trans(pose.position.x, pose.position.y, pose.position.z);
+  Eigen::Affine3f affine;
+  affine.translation() = trans;
+  affine.linear() = rot.toRotationMatrix();
+  matrix = affine.matrix();
+  return matrix;
+}
+
 Eigen::Matrix4f inverseTransformation(Eigen::Matrix4f m) {
   Eigen::Matrix4f inv = Eigen::Matrix4f::Identity();
   inv.block<3, 3>(0, 0) = m.block<3, 3>(0, 0).transpose();
