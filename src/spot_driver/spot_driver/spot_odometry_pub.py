@@ -12,6 +12,8 @@ from std_srvs.srv import Trigger
 from geometry_msgs.msg import TransformStamped
 from builtin_interfaces.msg import Time
 
+from nav_msgs.msg import Odometry
+
 from bosdyn.client import create_standard_sdk
 from bosdyn.client.frame_helpers import get_a_tform_b, VISION_FRAME_NAME, ODOM_FRAME_NAME, BODY_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME
 from bosdyn.client.robot_state import RobotStateClient
@@ -35,35 +37,39 @@ class SpotOdometryPublisher(Node):
         self.declare_parameter('spot_password', 'upsa43jm7vnf')
         self.spot_password = self.get_parameter('spot_password').get_parameter_value().string_value
 
-        # Initialize the transform broadcasters
-        self.tf_broadcaster = TransformBroadcaster(self)
-        self.tf_static_broadcaster = StaticTransformBroadcaster(self)
+        # # Initialize the transform broadcasters
+        # self.tf_broadcaster = TransformBroadcaster(self)
+        # self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
         # Create services
         self.srv_Connect = self.create_service(Trigger, "spot_driver/odometry/connect", self.connect_call_back)
-
         self.connected_to_spot = False
 
-        self.get_logger().info("Ready")
+        # Create publishers
+
+        self.ko_publisher_ = self.create_publisher(Odometry, "spot_driver/odometry/ko_odom", 10)
+        self.vo_publisher_ = self.create_publisher(Odometry, "spot_driver/odometry/vo_odom", 10)
+        self.gravity_publisher_ = self.create_publisher(TransformStamped, "spot_driver/state/gravity", 10)
+
+        self.sdk = None
+        self.robot = None
+        self.timer = None
 
     def connect_call_back(self, request, response):
 
         if self.connected_to_spot:
             response.success = True
-            response.message = ""
+            response.message = "Already connected to spot"
             return response
 
         # Connect to Spot
         try:
-
             self.get_logger().info("Conntecting to Spot...")
-
             self.sdk = create_standard_sdk('OdometryClient')
             self.robot = self.sdk.create_robot(self.spot_ip)
             self.robot.authenticate(self.spot_username, self.spot_password)
             self.robot.sync_with_directory()
             self.robot.time_sync.wait_for_sync()
-
             self.get_logger().info("Connected to Spot")
 
         except Exception as e:
@@ -72,11 +78,7 @@ class SpotOdometryPublisher(Node):
             return response
 
         # Ensure clients
-        self.point_cloud_client = self.robot.ensure_client('velodyne-point-cloud')
         self.robot_state_client = self.robot.ensure_client(RobotStateClient.default_service_name)
-
-        # Publish velodyne pose
-        self.publish_body_tform_velodyne()
 
         timer_period = 1.0 / self.spot_odometry_frequency  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -84,47 +86,15 @@ class SpotOdometryPublisher(Node):
         self.connected_to_spot = True
 
         response.success = True
-        response.message = ""
+        response.message = "Connected to Spot and publisher started"
         return response
 
-
-    def publish_body_tform_velodyne(self):
-
-        # Get a point cloud
-        point_clouds = self.point_cloud_client.get_point_cloud_from_sources(["velodyne-point-cloud"])
-
-        point_cloud_transforms_snapshot = point_clouds[0].point_cloud.source.transforms_snapshot
-        body_tform_velodyne = get_a_tform_b(
-            point_cloud_transforms_snapshot,
-            BODY_FRAME_NAME,
-            "sensor"
-        )
-
-        t = TransformStamped()
-
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = 'body'
-        t.child_frame_id = 'velodyne'
-
-        t.transform.translation.x = body_tform_velodyne.x
-        t.transform.translation.y = body_tform_velodyne.y
-        t.transform.translation.z = body_tform_velodyne.z
-
-        t.transform.rotation.x = body_tform_velodyne.rot.x
-        t.transform.rotation.y = body_tform_velodyne.rot.y
-        t.transform.rotation.z = body_tform_velodyne.rot.z
-        t.transform.rotation.w = body_tform_velodyne.rot.w
-
-        self.tf_static_broadcaster.sendTransform(t)
-
     def timer_callback(self):
-
-        self.get_logger().info("Publishing odometry")
 
         # Request robot state proto from Spot
         robot_state = self.robot_state_client.get_robot_state()
 
-        stamp = self.get_clock().now().to_msg()  # Save ros timestamp as close as possible from the request TODO maybe take the one from the proto directly
+        stamp = self.get_clock().now().to_msg()
 
         timestamp = robot_state.kinematic_state.acquisition_timestamp
         timestamp.seconds = timestamp.seconds - self.robot.time_sync.get_robot_clock_skew().seconds
@@ -161,39 +131,37 @@ class SpotOdometryPublisher(Node):
             GRAV_ALIGNED_BODY_FRAME_NAME
         )
 
-        ko = TransformStamped() # Kinematic Odometry
-        vo = TransformStamped() # Visual Odometry
-        grav = TransformStamped()
+        ko = Odometry()  # Kinematic Odometry
+        vo = Odometry()  # Visual Odometry
+        grav = TransformStamped()  # Gravity
 
         # stamp = self.get_clock().now().to_msg()
-
-        self.get_logger().info(f"Stamp : {stamp}")
 
         ko.header.stamp = stamp
         ko.header.frame_id = 'body'
         ko.child_frame_id = 'odom'
 
-        ko.transform.translation.x = body_tform_odom.x
-        ko.transform.translation.y = body_tform_odom.y
-        ko.transform.translation.z = body_tform_odom.z
+        ko.pose.pose.position.x = body_tform_odom.x
+        ko.pose.pose.position.y = body_tform_odom.y
+        ko.pose.pose.position.z = body_tform_odom.z
 
-        ko.transform.rotation.x = body_tform_odom.rot.x
-        ko.transform.rotation.y = body_tform_odom.rot.y
-        ko.transform.rotation.z = body_tform_odom.rot.z
-        ko.transform.rotation.w = body_tform_odom.rot.w
+        ko.pose.pose.orientation.x = body_tform_odom.rot.x
+        ko.pose.pose.orientation.y = body_tform_odom.rot.y
+        ko.pose.pose.orientation.z = body_tform_odom.rot.z
+        ko.pose.pose.orientation.w = body_tform_odom.rot.w
 
         vo.header.stamp = stamp
         vo.header.frame_id = 'body'
         vo.child_frame_id = 'vision'
 
-        vo.transform.translation.x = body_tform_vision.x
-        vo.transform.translation.y = body_tform_vision.y
-        vo.transform.translation.z = body_tform_vision.z
+        vo.pose.pose.position.x = body_tform_vision.x
+        vo.pose.pose.position.y = body_tform_vision.y
+        vo.pose.pose.position.z = body_tform_vision.z
 
-        vo.transform.rotation.x = body_tform_vision.rot.x
-        vo.transform.rotation.y = body_tform_vision.rot.y
-        vo.transform.rotation.z = body_tform_vision.rot.z
-        vo.transform.rotation.w = body_tform_vision.rot.w
+        vo.pose.pose.orientation.x = body_tform_vision.rot.x
+        vo.pose.pose.orientation.y = body_tform_vision.rot.y
+        vo.pose.pose.orientation.z = body_tform_vision.rot.z
+        vo.pose.pose.orientation.w = body_tform_vision.rot.w
 
         grav.header.stamp = stamp
         grav.header.frame_id = 'body'
@@ -209,9 +177,13 @@ class SpotOdometryPublisher(Node):
         grav.transform.rotation.w = body_tform_gravity.rot.w
 
         # Send the transformation
-        self.tf_broadcaster.sendTransform(ko)
-        self.tf_broadcaster.sendTransform(vo)
-        self.tf_broadcaster.sendTransform(grav)
+        # self.tf_broadcaster.sendTransform(ko)
+        # self.tf_broadcaster.sendTransform(vo)
+        # self.tf_broadcaster.sendTransform(grav)
+
+        self.ko_publisher_.publish(ko)
+        self.vo_publisher_.publish(vo)
+        self.gravity_publisher_.publish(grav)
 
 
 def main(args=None):
