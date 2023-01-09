@@ -47,15 +47,48 @@ public:
     this->declare_parameter("flat_leaf_size", 0.1f);
     flat_leaf_size = this->get_parameter("flat_leaf_size").get_parameter_value().get<float>();
 
+    this->declare_parameter("body_tform_velodyne_x", -0.202f);
+    body_tform_velodyne_x = this->get_parameter("body_tform_velodyne_x").get_parameter_value().get<float>();
+
+    this->declare_parameter("body_tform_velodyne_y", 0.0f);
+    body_tform_velodyne_y = this->get_parameter("body_tform_velodyne_y").get_parameter_value().get<float>();
+
+    this->declare_parameter("body_tform_velodyne_z", 0.151f);
+    body_tform_velodyne_z = this->get_parameter("body_tform_velodyne_z").get_parameter_value().get<float>();
+
+    this->declare_parameter("body_tform_velodyne_rot_x", -0.0f);
+    body_tform_velodyne_rot_x = this->get_parameter("body_tform_velodyne_rot_x").get_parameter_value().get<float>();
+
+    this->declare_parameter("body_tform_velodyne_rot_y", 0.0f);
+    body_tform_velodyne_rot_y = this->get_parameter("body_tform_velodyne_rot_y").get_parameter_value().get<float>();
+
+    this->declare_parameter("body_tform_velodyne_rot_z", -0.0f);
+    body_tform_velodyne_rot_z = this->get_parameter("body_tform_velodyne_rot_z").get_parameter_value().get<float>();
+
+    this->declare_parameter("body_tform_velodyne_rot_w", 1.0f);
+    body_tform_velodyne_rot_w = this->get_parameter("body_tform_velodyne_rot_w").get_parameter_value().get<float>();    
+
+
     n = 0;
 
-    tf_buffer_ =
-      std::make_unique<tf2_ros::Buffer>(this->get_clock());
-    tf_listener_ =
-      std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    tf_buffer_->setUsingDedicatedThread(true);
 
-    subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    // tf_listener_ =
+    //   std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+    callback_group_odom = this->create_callback_group(
+            rclcpp::CallbackGroupType::MutuallyExclusive);
+
+    rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
+    odom_options.callback_group = callback_group_odom;
+
+    cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
       "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1)
+    );
+
+    vo_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "spot_driver/odometry/vo_odom", 1000, std::bind(&FeatureExtraction::odomHandler, this, std::placeholders::_1), odom_options
     );
 
     publisher_ = this->create_publisher<slam::msg::Cloud>("slam/cloud", 10);
@@ -86,6 +119,16 @@ private:
   float threshold_flat;
 
   float flat_leaf_size;
+
+  float body_tform_velodyne_x;
+  float body_tform_velodyne_y;
+  float body_tform_velodyne_z;
+  float body_tform_velodyne_rot_x;
+  float body_tform_velodyne_rot_y;
+  float body_tform_velodyne_rot_z;
+  float body_tform_velodyne_rot_w;
+
+  Eigen::Matrix4f body_tform_velodyne;
 
   // Current
   sensor_msgs::msg::PointCloud2 current_cloud_msg;
@@ -143,13 +186,17 @@ private:
   std::deque<sensor_msgs::msg::PointCloud2> cloud_msg_cache;
 
   // Subscriptions
-  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_subscription_;
+
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr vo_subscription_;
+  rclcpp::CallbackGroup::SharedPtr callback_group_odom;
 
   rclcpp::Publisher<slam::msg::Cloud>::SharedPtr publisher_;
 
   // tf2
-  std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+
+  std::mutex tf_buffer_mtx;
 
   void allocateMemory() {
     current_cloud.reset(new pcl::PointCloud<PointXYZIRT>());
@@ -173,6 +220,16 @@ private:
     cloud_neighbor_picked.resize(16 * 1800);
 
     voxel_grid_flat.setLeafSize(flat_leaf_size, flat_leaf_size, flat_leaf_size);
+
+    body_tform_velodyne = valuesToMatrix(
+      body_tform_velodyne_x,
+      body_tform_velodyne_y,
+      body_tform_velodyne_z,
+      body_tform_velodyne_rot_x,
+      body_tform_velodyne_rot_y,
+      body_tform_velodyne_rot_z,
+      body_tform_velodyne_rot_w
+    );
   }
 
   void resetCurrent() {
@@ -190,6 +247,21 @@ private:
     mat_range = cv::Mat(16, 1800, CV_32F, cv::Scalar::all(std::numeric_limits<float>::max()));
   }
 
+  void odomHandler(const nav_msgs::msg::Odometry::SharedPtr odom_msg) {
+    geometry_msgs::msg::TransformStamped tf_stamped;
+    tf_stamped.header = odom_msg->header;
+    tf_stamped.child_frame_id = odom_msg->child_frame_id;
+    tf_stamped.transform.translation.x = odom_msg->pose.pose.position.x;
+    tf_stamped.transform.translation.y = odom_msg->pose.pose.position.y;
+    tf_stamped.transform.translation.z = odom_msg->pose.pose.position.z;
+    tf_stamped.transform.rotation = odom_msg->pose.pose.orientation;
+    {
+      std::lock_guard<std::mutex> lock(tf_buffer_mtx);
+      tf_buffer_->setTransform(
+          tf_stamped, "transform_odometry", false);
+    }
+  }
+
   void cloudHandler(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
 
     if (!cacheCloudMsg(cloud_msg)) { // If there is not enough point-cloud in cache
@@ -197,20 +269,23 @@ private:
     }
 
     // Image projection
+    {
 
-    imageProjection();
+      Timer timer;
+      imageProjection();
 
-    organizeCloud();
+      organizeCloud();
 
-    computeSmoothness();
+      computeSmoothness();
 
-    markUnreliable();
+      markUnreliable();
 
-    exctractFeatures();
+      exctractFeatures();
 
-    publishClouds();
+      publishClouds();
 
-    resetCurrent();
+      resetCurrent();
+    }
   }
 
   bool cacheCloudMsg(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
@@ -244,20 +319,43 @@ private:
     start_point_time = current_cloud->points.front().time;
     end_point_time = current_cloud->points.back().time;
 
-    try {
+    RCLCPP_INFO(this->get_logger(), "Ça bloque ici");
 
-      t_start = tf_buffer_->lookupTransform(
-            "vision", "velodyne",
-            rclcpp::Time(current_start_time_cloud));
+    {
+      std::lock_guard<std::mutex> lock(tf_buffer_mtx);
+      if (tf_buffer_->canTransform("vision", "body", rclcpp::Time(current_start_time_cloud))) {
 
-      t_end = tf_buffer_->lookupTransform(
-              "vision", "velodyne",
-              rclcpp::Time(current_end_time_cloud));
+        t_start = tf_buffer_->lookupTransform("vision", "body", rclcpp::Time(current_start_time_cloud));
 
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
-      return false;
+      } else {
+        RCLCPP_INFO(this->get_logger(), "Could not find transform vision_tform_body");
+        return false;
+      }
+
+      if (tf_buffer_->canTransform("vision", "body", rclcpp::Time(current_end_time_cloud))) {
+
+        t_end = tf_buffer_->lookupTransform("vision", "body", rclcpp::Time(current_end_time_cloud));
+
+      } else {
+        RCLCPP_INFO(this->get_logger(), "Could not find transform vision_tform_body");
+        return false;
+      }
     }
+
+    // try {
+
+    //   t_start = tf_buffer_->lookupTransform(
+    //         "vision", "velodyne",
+    //         rclcpp::Time(current_start_time_cloud));
+
+    //   t_end = tf_buffer_->lookupTransform(
+    //           "vision", "velodyne",
+    //           rclcpp::Time(current_end_time_cloud));
+
+    // } catch (const tf2::TransformException & ex) {
+    //   RCLCPP_INFO(this->get_logger(), "Could not find transform : %s", ex.what());
+    //   return false;
+    // }
 
 
     rot_start = Eigen::Quaternionf(t_start.transform.rotation.w, t_start.transform.rotation.x, t_start.transform.rotation.y, t_start.transform.rotation.z);
@@ -274,7 +372,10 @@ private:
     affine_end.translation() = trans_end;
     affine_end.linear() = rot_end.toRotationMatrix();
 
-    Eigen::Affine3f affine_diff = affine_start.inverse() * affine_end;
+    Eigen::Affine3f affine_body_tform_velodyne;
+    affine_body_tform_velodyne.matrix() = body_tform_velodyne;
+
+    Eigen::Affine3f affine_diff = (affine_start * affine_body_tform_velodyne).inverse() * (affine_end * affine_body_tform_velodyne);
 
     rot_diff = affine_diff.linear();
 
@@ -630,13 +731,18 @@ private:
     cloud_msg.initial_guess_rot_z = t_start.transform.rotation.z;
 
     publisher_->publish(cloud_msg);
+
+    RCLCPP_INFO(this->get_logger(), "Cloud published");
   }
 
 };
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<FeatureExtraction>());
+  rclcpp::executors::MultiThreadedExecutor exec;
+  auto feature_extraction_node = std::make_shared<FeatureExtraction>();
+  exec.add_node(feature_extraction_node);
+  exec.spin();
   rclcpp::shutdown();
   return 0;
 }

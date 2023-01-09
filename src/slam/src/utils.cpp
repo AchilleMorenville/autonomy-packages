@@ -22,6 +22,17 @@ Eigen::Matrix4f poseToMatrix(geometry_msgs::msg::Pose pose) {
   return matrix;
 }
 
+Eigen::Matrix4f valuesToMatrix(float x, float y, float z, float rot_x, float rot_y, float rot_z, float rot_w) {
+  Eigen::Matrix4f matrix;
+  Eigen::Quaternionf rot(rot_w, rot_x, rot_y, rot_z);
+  Eigen::Vector3f trans(x, y, z);
+  Eigen::Affine3f affine;
+  affine.translation() = trans;
+  affine.linear() = rot.toRotationMatrix();
+  matrix = affine.matrix();
+  return matrix;
+}
+
 Eigen::Matrix4f inverseTransformation(Eigen::Matrix4f m) {
   Eigen::Matrix4f inv = Eigen::Matrix4f::Identity();
   inv.block<3, 3>(0, 0) = m.block<3, 3>(0, 0).transpose();

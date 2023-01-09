@@ -30,6 +30,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
@@ -95,6 +96,8 @@ private:
 Eigen::Matrix4f transformStampedToMatrix(geometry_msgs::msg::TransformStamped t);
 
 Eigen::Matrix4f poseToMatrix(geometry_msgs::msg::Pose pose);
+
+Eigen::Matrix4f valuesToMatrix(float x, float y, float z, float rot_x, float rot_y, float rot_z, float rot_w);
 
 Eigen::Matrix4f inverseTransformation(Eigen::Matrix4f m);
 
