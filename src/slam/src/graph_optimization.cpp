@@ -118,6 +118,10 @@ public:
       "spot_driver/state/gravity", 1000, std::bind(&GraphOptimization::gravityHandler, this, std::placeholders::_1), gravity_options
     );
 
+    subscription_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "spot_driver/odometry/vo_odom", 1000, std::bind(&GraphOptimization::odomHandler, this, std::placeholders::_1), gravity_options
+    );
+
     srv_SaveMap = this->create_service<autonomous_interfaces::srv::SlamSaveMap>("slam/save_map", std::bind(&GraphOptimization::saveMap, this, std::placeholders::_1, std::placeholders::_2));
     srv_Start = this->create_service<std_srvs::srv::Trigger>("slam/start", std::bind(&GraphOptimization::startProcess, this, std::placeholders::_1, std::placeholders::_2));
     srv_Stop = this->create_service<std_srvs::srv::Trigger>("slam/stop", std::bind(&GraphOptimization::stopProcess, this, std::placeholders::_1, std::placeholders::_2));
@@ -266,6 +270,7 @@ private:
 
   rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr subscription_gravity_;
   rclcpp::CallbackGroup::SharedPtr callback_group_gravity;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscription_odom_;
 
   rclcpp::Service<autonomous_interfaces::srv::SlamSaveMap>::SharedPtr srv_SaveMap;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Start;
@@ -322,6 +327,20 @@ private:
   void gravityHandler(const geometry_msgs::msg::TransformStamped::SharedPtr gravity_msg) {
     std::lock_guard<std::mutex> lock(tf_buffer_mtx);
     tf_buffer_->setTransform(*gravity_msg, "transform_odometry", false);
+  }
+
+  void odomHandler(const nav_msgs::msg::Odometry::SharedPtr odom_msg) {
+    geometry_msgs::msg::TransformStamped tf_stamped;
+    tf_stamped.header = odom_msg->header;
+    tf_stamped.child_frame_id = odom_msg->child_frame_id;
+    tf_stamped.transform.translation.x = odom_msg->pose.pose.position.x;
+    tf_stamped.transform.translation.y = odom_msg->pose.pose.position.y;
+    tf_stamped.transform.translation.z = odom_msg->pose.pose.position.z;
+    tf_stamped.transform.rotation = odom_msg->pose.pose.orientation;
+    {
+      std::lock_guard<std::mutex> lock(tf_buffer_mtx);
+      tf_buffer_->setTransform(tf_stamped, "transform_odometry", false);
+    }
   }
 
   void fiducialsHandler(const autonomous_interfaces::msg::Fiducials::SharedPtr fiducials_msg) {
@@ -491,11 +510,14 @@ private:
 
     geometry_msgs::msg::TransformStamped t_lidar_gravity;
 
-    if (tf_buffer_->canTransform("body", "gravity", input_header.stamp)) {
-      t_lidar_gravity = tf_buffer_->lookupTransform("body", "gravity", input_header.stamp);
-    } else {
-      RCLCPP_INFO(this->get_logger(), "Could not find gravity");
-      return;
+    {
+      std::lock_guard<std::mutex> lock(tf_buffer_mtx);
+      if (tf_buffer_->canTransform("body", "gravity", input_header.stamp)) {
+        t_lidar_gravity = tf_buffer_->lookupTransform("body", "gravity", input_header.stamp);
+      } else {
+        RCLCPP_INFO(this->get_logger(), "Could not find gravity");
+        return;
+      }
     }
 
     Eigen::Quaternionf rot(t_lidar_gravity.transform.rotation.w, t_lidar_gravity.transform.rotation.x, t_lidar_gravity.transform.rotation.y, t_lidar_gravity.transform.rotation.z);
@@ -516,123 +538,130 @@ private:
     gravity_added = true;
   }
 
-  // void addFiducialFactors() {
+  void addFiducialFactors() {
 
-  //   // return;
+    // return;
 
-  //   while (!fiducials_queue.empty()) {
+    while (!fiducials_queue.empty()) {
 
-  //     double current_fiducial_time = rclcpp::Time(fiducials_queue.front().fiducials[0].stamp).seconds();
-  //     double current_key_frame_time = rclcpp::Time(input_header.stamp).seconds();
+      fiducials_mtx.lock();
+      double current_fiducial_time = rclcpp::Time(fiducials_queue.front().fiducials[0].stamp).seconds();
+      long current_fiducial_nano = rclcpp::Time(fiducials_queue.front().fiducials[0].stamp).nanoseconds();
+      fiducials_mtx.unlock();
 
-  //     long current_fiducial_nano = rclcpp::Time(fiducials_queue.front().fiducials[0].stamp).nanoseconds();
-  //     long current_key_frame_nano = rclcpp::Time(input_header.stamp).nanoseconds();
+      double current_key_frame_time = rclcpp::Time(input_header.stamp).seconds();
+      long current_key_frame_nano = rclcpp::Time(input_header.stamp).nanoseconds();
 
-  //     if (current_key_frame_time < current_fiducial_time) { // The current key_frame is older than fiducials so we can't check which one is better
+      if (current_key_frame_time < current_fiducial_time) { // The current key_frame is older than fiducials so we can't check which one is better
+        RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial too new : %f \033[0m", current_fiducial_time - current_key_frame_time);
+        break;
+      }
+
+      if (current_key_frame_time - current_fiducial_time > 5.0) {  // The current fiducials are to old
         
-  //       RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial too new : %f \033[0m", current_fiducial_time - current_key_frame_time);
-  //       break;
-  //     }
+        {
+          std::lock_guard<std::mutex> lock(fiducials_mtx);
+          fiducials_queue.pop_front();
+        }
 
-  //     if (current_key_frame_time - current_fiducial_time > 5.0) {  // The current fiducials are to old
-  //       fiducials_queue.pop_front();
+        RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial too old : %f \033[0m", current_key_frame_time - current_fiducial_time);
 
-  //       RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial too old : %f \033[0m", current_key_frame_time - current_fiducial_time);
+        continue;
+      }
 
-  //       continue;
-  //     }
+      int best_idx = poses_3D->points.size();
+      double min_time_diff = current_key_frame_time - current_fiducial_time;
+      for (int i = best_idx - 1; i >= 0; --i) {
 
-  //     int best_idx = poses_3D->points.size();
-  //     double min_time_diff = current_key_frame_time - current_fiducial_time;
-  //     for (int i = best_idx - 1; i >= 0; --i) {
-
-  //       double current_time_diff = std::abs(rclcpp::Time(key_frames_headers[i].stamp).seconds() - current_fiducial_time);
+        double current_time_diff = std::abs(rclcpp::Time(key_frames_headers[i].stamp).seconds() - current_fiducial_time);
         
-  //       if (current_time_diff < min_time_diff) {
-  //         min_time_diff = current_time_diff;
-  //         current_key_frame_time = rclcpp::Time(key_frames_headers[i].stamp).seconds();
-  //         current_key_frame_nano = rclcpp::Time(key_frames_headers[i].stamp).nanoseconds();
-  //         best_idx = i;
-  //       } else {
-  //         break;
-  //       }
-  //     }
+        if (current_time_diff < min_time_diff) {
+          min_time_diff = current_time_diff;
+          current_key_frame_time = rclcpp::Time(key_frames_headers[i].stamp).seconds();
+          current_key_frame_nano = rclcpp::Time(key_frames_headers[i].stamp).nanoseconds();
+          best_idx = i;
+        } else {
+          break;
+        }
+      }
 
-  //     if (poses_3D->points.size() - best_idx > 10) { // The key frame is too old
-  //       fiducials_queue.pop_front();
-  //       RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial not close enough to keyframe : %d \033[0m", (int) poses_3D->points.size() - best_idx);
-  //       continue;
-  //     }
+      if (poses_3D->points.size() - best_idx > 10 || min_time_diff > 2.0) { // The key frame is too old
+        {
+          std::lock_guard<std::mutex> lock(fiducials_mtx);
+          fiducials_queue.pop_front();
+        }
+        RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial not close enough to keyframe : %d \033[0m", (int) poses_3D->points.size() - best_idx);
+        continue;
+      }
 
-  //     if (min_time_diff > 2.0) { // The current fiducials are not close enough to the frame
-  //       fiducials_queue.pop_front();
-  //       RCLCPP_INFO(this->get_logger(), "\033[1;32m Fiducial time not close enough to keyframe time : %f \033[0m", min_time_diff);
-  //       continue;
-  //     }
+      Eigen::Matrix4f displacement_pose_between = Eigen::Matrix4f::Identity();
 
-  //     Eigen::Matrix4f displacement_pose_between = Eigen::Matrix4f::Identity();
+      geometry_msgs::msg::TransformStamped t_vision_tform_body_key_frame;
+      geometry_msgs::msg::TransformStamped t_vision_tform_body_fiducial;
 
-  //     geometry_msgs::msg::TransformStamped t_vision_tform_velodyne_key_frame; = tf_buffer_->lookupTransform(
-  //         "vision", "velodyne",
-  //         rclcpp::Time(current_key_frame_nano));
+      {
+        std::lock_guard<std::mutex> lock(tf_buffer_mtx);
+        if (tf_buffer_->canTransform("vision", "body", rclcpp::Time(current_key_frame_nano))) {
+          t_vision_tform_body_key_frame = tf_buffer_->lookupTransform("vision", "body", rclcpp::Time(current_key_frame_nano));
+        } else {
+          RCLCPP_INFO(this->get_logger(), "Could not find vision tform body transform");
+          break;
+        }
+        if (tf_buffer_->canTransform("vision", "body", rclcpp::Time(current_fiducial_nano))) {
+          t_vision_tform_body_fiducial = tf_buffer_->lookupTransform("vision", "body", rclcpp::Time(current_fiducial_nano));
+        } else {
+          RCLCPP_INFO(this->get_logger(), "Could not find vision tform body transform");
+          break;
+        }
+      }
 
-  //     geometry_msgs::msg::TransformStamped t_vision_tform_velodyne_fiducial; = tf_buffer_->lookupTransform(
-  //         "vision", "velodyne",
-  //         rclcpp::Time(current_fiducial_nano));
+      Eigen::Matrix4f vision_tform_body_key_frame = transformStampedToMatrix(t_vision_tform_body_key_frame);
+      Eigen::Matrix4f vision_tform_body_fiducial = transformStampedToMatrix(t_vision_tform_body_fiducial);
+      Eigen::Matrix4f key_frame_tform_fiducial = getDifferenceTransformation(vision_tform_body_key_frame, vision_tform_body_fiducial);
 
-  //     Eigen::Matrix4f vision_tform_velodyne_key_frame = transformStampedToMatrix(t_vision_tform_velodyne_key_frame);
-  //     Eigen::Matrix4f vision_tform_velodyne_fiducial = transformStampedToMatrix(t_vision_tform_velodyne_fiducial);
+      {
+        std::lock_guard<std::mutex> lock(fiducials_mtx);
+        int fiducials_size = fiducials_queue.front().nbr;
+        for (int i = 0; i < fiducials_size; i++) {
+          Eigen::Matrix4f body_tform_fiducial = poseToMatrix(fiducials_queue.front().fiducials[i].pose);
+          Eigen::Matrix4f pose_between = key_frame_tform_fiducial * body_tform_fiducial;
+          // Eigen::Matrix4f pose_between = velodyne_tform_body * body_tform_fiducial;
 
-  //     Eigen::Matrix4f key_frame_tform_fiducial = getDifferenceTransformation(vision_tform_velodyne_key_frame, vision_tform_velodyne_fiducial);
+          auto it = tag_ids.find(fiducials_queue.front().fiducials[i].tag_id);
+          if (it == tag_ids.end()) {
+            tag_ids.insert(fiducials_queue.front().fiducials[i].tag_id);
+            Eigen::Matrix4f current_pose = Eigen::Matrix4f::Identity();
+            if (best_idx == (int) poses_6D.size()) {
+              current_pose = optimized_pose_6D;
+            } else {
+              current_pose = poses_6D[best_idx];
+            }
 
-  //     geometry_msgs::msg::TransformStamped t_velodyne_tform_body = tf_buffer_->lookupTransform(
-  //         "velodyne", "body",
-  //         tf2::TimePointZero);
+            Eigen::Matrix4f pose_fiducial = current_pose * pose_between;
+            // Eigen::Matrix4f pose_fiducial = (current_pose * velodyne_tform_body) * body_tform_fiducial;
+            initial_estimate.insert(gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_fiducial.cast<double>()));
+          }
 
-  //     Eigen::Matrix4f velodyne_tform_body = transformStampedToMatrix(t_velodyne_tform_body);
+          auto it_map = key_frames_tag_ids.find(best_idx);
+          if (it_map == key_frames_tag_ids.end()) {
+            key_frames_tag_ids.emplace(best_idx, std::unordered_set<int>());
+          }
 
-  //     displacement_pose_between = key_frame_tform_fiducial * velodyne_tform_body;
+          auto it_set = key_frames_tag_ids[best_idx].find(fiducials_queue.front().fiducials[i].tag_id);
+          if (it_set == key_frames_tag_ids[best_idx].end()) {
+            key_frames_tag_ids[best_idx].insert(fiducials_queue.front().fiducials[i].tag_id);
+            graph.add(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::Symbol('x', best_idx), gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_between.cast<double>()), fiducial_noise));
+            RCLCPP_INFO(this->get_logger(), "\033[1;32m Link keyframe %d (max %d) to fiducial %d \033[0m", best_idx, (int) poses_3D->points.size(), fiducials_queue.front().fiducials[i].tag_id);
+            fiducial_added = true;
+          }
+          // graph.add(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::Symbol('x', best_idx), gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_between.cast<double>()), fiducial_noise));
+        }
 
-  //     int fiducials_size = fiducials_queue.front().nbr;
-  //     for (int i = 0; i < fiducials_size; i++) {
-  //       Eigen::Matrix4f body_tform_fiducial = poseToMatrix(fiducials_queue.front().fiducials[i].pose);
-  //       Eigen::Matrix4f pose_between = displacement_pose_between * body_tform_fiducial;
-  //       // Eigen::Matrix4f pose_between = velodyne_tform_body * body_tform_fiducial;
+        fiducials_queue.pop_front();
+      }
 
-  //       auto it = tag_ids.find(fiducials_queue.front().fiducials[i].tag_id);
-  //       if (it == tag_ids.end()) {
-  //         tag_ids.insert(fiducials_queue.front().fiducials[i].tag_id);
-  //         Eigen::Matrix4f current_pose = Eigen::Matrix4f::Identity();
-  //         if (best_idx == (int) poses_6D.size()) {
-  //           current_pose = optimized_pose_6D;
-  //         } else {
-  //           current_pose = poses_6D[best_idx];
-  //         }
-
-  //         Eigen::Matrix4f pose_fiducial = current_pose * pose_between;
-  //         // Eigen::Matrix4f pose_fiducial = (current_pose * velodyne_tform_body) * body_tform_fiducial;
-  //         initial_estimate.insert(gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_fiducial.cast<double>()));
-  //       }
-
-  //       auto it_map = key_frames_tag_ids.find(best_idx);
-  //       if (it_map == key_frames_tag_ids.end()) {
-  //         key_frames_tag_ids.emplace(best_idx, std::unordered_set<int>());
-  //       }
-
-  //       auto it_set = key_frames_tag_ids[best_idx].find(fiducials_queue.front().fiducials[i].tag_id);
-  //       if (it_set == key_frames_tag_ids[best_idx].end()) {
-  //         key_frames_tag_ids[best_idx].insert(fiducials_queue.front().fiducials[i].tag_id);
-  //         graph.add(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::Symbol('x', best_idx), gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_between.cast<double>()), fiducial_noise));
-  //         RCLCPP_INFO(this->get_logger(), "\033[1;32m Link keyframe %d (max %d) to fiducial %d \033[0m", best_idx, (int) poses_3D->points.size(), fiducials_queue.front().fiducials[i].tag_id);
-  //         fiducial_added = true;
-  //       }
-  //       // graph.add(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::Symbol('x', best_idx), gtsam::Symbol('l', (int) fiducials_queue.front().fiducials[i].tag_id), gtsam::Pose3(pose_between.cast<double>()), fiducial_noise));
-  //     }
-
-  //     fiducials_queue.pop_front();
-
-  //   }
-  // }
+    }
+  }
 
   void saveKeyFrameAndFactors() {
 
@@ -648,7 +677,7 @@ private:
 
     addGravityFactor();
 
-    // addFiducialFactors();
+    addFiducialFactors();
 
     isam->update(graph, initial_estimate);
     isam->update();
