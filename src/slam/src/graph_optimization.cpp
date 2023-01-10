@@ -1096,6 +1096,13 @@ private:
     key_frames_flat_points.clear();
     key_frames_all_points.clear();
 
+    key_frames_headers.clear();
+
+    fiducials_queue.clear();
+
+    tag_ids.clear();
+    key_frames_tag_ids.clear();
+
     estimated_displacement = Eigen::Matrix4f::Identity();
     last_robot_odometry = Eigen::Matrix4f::Identity();
     optimized_pose_6D = Eigen::Matrix4f::Identity();
