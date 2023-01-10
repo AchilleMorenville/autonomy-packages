@@ -88,8 +88,14 @@ public:
     this->declare_parameter("loop_closure_frequency", 1.0f);
     loop_closure_frequency = this->get_parameter("loop_closure_frequency").get_parameter_value().get<float>();
 
+    callback_group_cloud = this->create_callback_group(
+            rclcpp::CallbackGroupType::MutuallyExclusive);
+
+    rclcpp::SubscriptionOptions cloud_options = rclcpp::SubscriptionOptions();
+    cloud_options.callback_group = callback_group_cloud;
+
     subscription_cloud_ = this->create_subscription<slam::msg::Cloud>(
-      "slam/cloud", 10, std::bind(&GraphOptimization::cloudHandler, this, std::placeholders::_1)
+      "slam/cloud", 10, std::bind(&GraphOptimization::cloudHandler, this, std::placeholders::_1), cloud_options
     );
 
     callback_group_fiducials = this->create_callback_group(
@@ -253,6 +259,7 @@ private:
 
   // Subscription
   rclcpp::Subscription<slam::msg::Cloud>::SharedPtr subscription_cloud_;
+  rclcpp::CallbackGroup::SharedPtr callback_group_cloud;
 
   rclcpp::Subscription<autonomous_interfaces::msg::Fiducials>::SharedPtr subscription_fiducials_;
   rclcpp::CallbackGroup::SharedPtr callback_group_fiducials;
@@ -322,7 +329,7 @@ private:
       return;
     }
 
-    std::lock_guard<std::mutex> lock(mtx);
+    std::lock_guard<std::mutex> lock(fiducials_mtx);
     fiducials_queue.push_back(*fiducials_msg);
     if (fiducials_queue.size() > 10) {
       fiducials_queue.pop_front();
@@ -974,14 +981,22 @@ private:
     mtx.lock();
     int poses_3D_size = (int) poses_3D->points.size();
     mtx.unlock();
+
+    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_map;
+    voxel_grid_map.setLeafSize(0.05, 0.05, 0.05);
     
     for (int i = 0; i < poses_3D_size; ++i) {
 
       pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_key_frame_all_points(new pcl::PointCloud<pcl::PointXYZI>);
 
       mtx.lock();
-      pcl::transformPointCloud(*key_frames_all_points[i], *transformed_key_frame_all_points, poses_6D[i]);
+
+      voxel_grid_map.setInputCloud(key_frames_all_points[i]);
+      voxel_grid_map.filter(*transformed_key_frame_all_points);
+
       mtx.unlock();
+
+      pcl::transformPointCloud(*transformed_key_frame_all_points, *transformed_key_frame_all_points, poses_6D[i]);
 
       *map += *transformed_key_frame_all_points;
     }
