@@ -677,7 +677,7 @@ private:
 
     addGravityFactor();
 
-    addFiducialFactors();
+    // addFiducialFactors();
 
     isam->update(graph, initial_estimate);
     isam->update();
