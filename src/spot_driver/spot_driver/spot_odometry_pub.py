@@ -47,9 +47,9 @@ class SpotOdometryPublisher(Node):
 
         # Create publishers
 
-        self.ko_publisher_ = self.create_publisher(Odometry, "spot_driver/odometry/ko_odom", 10)
-        self.vo_publisher_ = self.create_publisher(Odometry, "spot_driver/odometry/vo_odom", 10)
-        self.gravity_publisher_ = self.create_publisher(TransformStamped, "spot_driver/state/gravity", 10)
+        self.ko_publisher_ = self.create_publisher(Odometry, "spot_driver/odometry/ko_odom", 1000)
+        self.vo_publisher_ = self.create_publisher(Odometry, "spot_driver/odometry/vo_odom", 1000)
+        self.gravity_publisher_ = self.create_publisher(TransformStamped, "spot_driver/state/gravity", 1000)
 
         self.sdk = None
         self.robot = None

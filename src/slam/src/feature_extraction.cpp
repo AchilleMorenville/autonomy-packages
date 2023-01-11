@@ -83,19 +83,15 @@ public:
     rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
     odom_options.callback_group = callback_group_odom;
 
-    callback_group_cloud = this->create_callback_group(
-            rclcpp::CallbackGroupType::MutuallyExclusive);
-
-    rclcpp::SubscriptionOptions cloud_options = rclcpp::SubscriptionOptions();
-    cloud_options.callback_group = callback_group_cloud;
-
     cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1), cloud_options
+      "velodyne_points", 1000, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1)
     );
 
     vo_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "spot_driver/odometry/vo_odom", 1000, std::bind(&FeatureExtraction::odomHandler, this, std::placeholders::_1), odom_options
     );
+
+
 
     publisher_ = this->create_publisher<slam::msg::Cloud>("slam/cloud", 10);
 
@@ -193,7 +189,6 @@ private:
 
   // Subscriptions
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_subscription_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_cloud;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr vo_subscription_;
   rclcpp::CallbackGroup::SharedPtr callback_group_odom;
@@ -746,7 +741,9 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::executors::MultiThreadedExecutor exec;
+
+  rclcpp::executors::MultiThreadedExecutor exec(rclcpp::ExecutorOptions(), 1, false, std::chrono::milliseconds(500));
+  // rclcpp::executors::SingleThreadedExecutor exec;
   auto feature_extraction_node = std::make_shared<FeatureExtraction>();
   exec.add_node(feature_extraction_node);
   exec.spin();
