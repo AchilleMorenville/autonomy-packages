@@ -77,11 +77,11 @@ public:
     // tf_listener_ =
     //   std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-    // callback_group_odom = this->create_callback_group(
-    //         rclcpp::CallbackGroupType::MutuallyExclusive);
+    callback_group_odom = this->create_callback_group(
+            rclcpp::CallbackGroupType::Reentrant);
 
-    // rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
-    // odom_options.callback_group = callback_group_odom;
+    rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
+    odom_options.callback_group = callback_group_odom;
 
     callback_group_cloud = this->create_callback_group(
             rclcpp::CallbackGroupType::Reentrant);
@@ -102,7 +102,7 @@ public:
     );
 
     vo_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      "spot_driver/odometry/vo_odom", 1000, std::bind(&FeatureExtraction::odomHandler, this, std::placeholders::_1), cloud_options
+      "spot_driver/odometry/vo_odom", 1000, std::bind(&FeatureExtraction::odomHandler, this, std::placeholders::_1), odom_options
     );
 
 
@@ -206,7 +206,7 @@ private:
   rclcpp::CallbackGroup::SharedPtr callback_group_cloud;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr vo_subscription_;
-  // rclcpp::CallbackGroup::SharedPtr callback_group_odom;
+  rclcpp::CallbackGroup::SharedPtr callback_group_odom;
 
   rclcpp::Publisher<slam::msg::Cloud>::SharedPtr publisher_;
 
