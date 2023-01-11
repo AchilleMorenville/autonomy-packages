@@ -83,11 +83,11 @@ public:
     rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
     odom_options.callback_group = callback_group_odom;
 
-    // callback_group_cloud = this->create_callback_group(
-    //         rclcpp::CallbackGroupType::MutuallyExclusive);
+    callback_group_cloud = this->create_callback_group(
+            rclcpp::CallbackGroupType::MutuallyExclusive);
 
-    // rclcpp::SubscriptionOptions cloud_options = rclcpp::SubscriptionOptions();
-    // cloud_options.callback_group = callback_group_cloud;
+    rclcpp::SubscriptionOptions cloud_options = rclcpp::SubscriptionOptions();
+    cloud_options.callback_group = callback_group_cloud;
 
     // cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     //   "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1), cloud_options
@@ -98,7 +98,7 @@ public:
     // );
 
     cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1)
+      "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1), cloud_options
     );
 
     vo_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -203,7 +203,7 @@ private:
 
   // Subscriptions
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_subscription_;
-  // rclcpp::CallbackGroup::SharedPtr callback_group_cloud;
+  rclcpp::CallbackGroup::SharedPtr callback_group_cloud;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr vo_subscription_;
   rclcpp::CallbackGroup::SharedPtr callback_group_odom;
