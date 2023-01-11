@@ -78,7 +78,7 @@ public:
     //   std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     callback_group_odom = this->create_callback_group(
-            rclcpp::CallbackGroupType::Reentrant);
+            rclcpp::CallbackGroupType::MutuallyExclusive);
 
     rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
     odom_options.callback_group = callback_group_odom;
@@ -98,7 +98,7 @@ public:
     // );
 
     cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1), odom_options
+      "velodyne_points", 10, std::bind(&FeatureExtraction::cloudHandler, this, std::placeholders::_1)
     );
 
     vo_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
