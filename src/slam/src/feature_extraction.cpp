@@ -758,7 +758,7 @@ int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
 
   rclcpp::NodeOptions options;
-  options.use_intra_process_comms(true);
+  options.use_intra_process_comms(false);
 
   rclcpp::executors::MultiThreadedExecutor exec;
   // rclcpp::executors::SingleThreadedExecutor exec;
