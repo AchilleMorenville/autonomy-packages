@@ -84,7 +84,7 @@ public:
     // odom_options.callback_group = callback_group_odom;
 
     callback_group_cloud = this->create_callback_group(
-            rclcpp::CallbackGroupType::MutuallyExclusive);
+            rclcpp::CallbackGroupType::Reentrant);
 
     rclcpp::SubscriptionOptions cloud_options = rclcpp::SubscriptionOptions();
     cloud_options.callback_group = callback_group_cloud;
