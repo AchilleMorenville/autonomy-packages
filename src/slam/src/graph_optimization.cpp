@@ -675,7 +675,7 @@ private:
 
     addLoopFactor();
 
-    // addGravityFactor();
+    addGravityFactor();
 
     // addFiducialFactors();
 
