@@ -1131,10 +1131,8 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-
-  rclcpp::NodeOptions options;
-  options.use_intra_process_comms(true);
-  rclcpp::executors::MultiThreadedExecutor exec;
+  
+  rclcpp::executors::MultiThreadedExecutor exec(rclcpp::ExecutorOptions(), 1, false, std::chrono::milliseconds(500));
 
   auto GO = std::make_shared<GraphOptimization>();
   exec.add_node(GO);
