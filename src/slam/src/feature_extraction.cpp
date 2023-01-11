@@ -15,7 +15,7 @@ class FeatureExtraction : public rclcpp::Node {
 
 public:
 
-  FeatureExtraction() : Node("feature_extraction") {
+  FeatureExtraction(const rclcpp::NodeOptions & options) : Node("feature_extraction", options) {
 
     this->declare_parameter("cloud_msg_cache_size", 2);
     cloud_msg_cache_size = this->get_parameter("cloud_msg_cache_size").get_parameter_value().get<int>();
@@ -756,9 +756,13 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
+
+  rclcpp::NodeOptions options;
+  options.use_intra_process_comms(true);
+
   rclcpp::executors::MultiThreadedExecutor exec;
   // rclcpp::executors::SingleThreadedExecutor exec;
-  auto feature_extraction_node = std::make_shared<FeatureExtraction>();
+  auto feature_extraction_node = std::make_shared<FeatureExtraction>(options);
   exec.add_node(feature_extraction_node);
   exec.spin();
   rclcpp::shutdown();
