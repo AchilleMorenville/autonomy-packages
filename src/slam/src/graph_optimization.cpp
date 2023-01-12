@@ -18,7 +18,7 @@ class GraphOptimization : public rclcpp::Node {
 
 public:
 
-  GraphOptimization() : Node("feature_extraction") {
+  GraphOptimization() : Node("graph_optimization") {
 
     n = 0;
 
@@ -454,7 +454,7 @@ private:
       local_map_flat_points,
       kdtree_local_map_edge_points,
       kdtree_local_map_flat_points,
-      0.20
+      0.2
     );
 
     estimated_displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
@@ -675,7 +675,7 @@ private:
 
     addLoopFactor();
 
-    addGravityFactor();
+    // addGravityFactor();
 
     // addFiducialFactors();
 
