@@ -14,9 +14,9 @@ feature_extraction:
 graph_optimization:
     ros__parameters:
         flat_leaf_size: 0.2
-        edge_leaf_size: 0.1
+        edge_leaf_size: 0.05
         ICP_leaf_size: 0.2
-        local_map_size: 50
+        local_map_size: 100
         rad_new_key_frame: 0.17
         dist_new_key_frame: 0.2
         loop_search_dist: 2.0

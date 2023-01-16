@@ -239,6 +239,23 @@ private:
       body_tform_velodyne_rot_z,
       body_tform_velodyne_rot_w
     );
+
+    geometry_msgs::msg::TransformStamped tf_velodyne;
+    tf_velodyne.header.frame_id = "body";
+    tf_velodyne.child_frame_id = "velodyne";
+    tf_velodyne.transform.translation.x = body_tform_velodyne_x;
+    tf_velodyne.transform.translation.y = body_tform_velodyne_y;
+    tf_velodyne.transform.translation.z = body_tform_velodyne_z;
+    tf_velodyne.transform.rotation.x = body_tform_velodyne_rot_x;
+    tf_velodyne.transform.rotation.y = body_tform_velodyne_rot_y;
+    tf_velodyne.transform.rotation.z = body_tform_velodyne_rot_z;
+    tf_velodyne.transform.rotation.w = body_tform_velodyne_rot_w;
+
+    {
+      std::lock_guard<std::mutex> lock(tf_buffer_mtx);
+      tf_buffer_->setTransform(
+          tf_velodyne, "transform_odometry", true);
+    }
   }
 
   void resetCurrent() {
@@ -650,11 +667,31 @@ private:
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_edge_points(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_flat_points(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_organized_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+
+    for (int i = 0; i < organized_cloud->points.size(); ++i) {
+
+      pcl::PointXYZI point;
+      point.x = organized_cloud->points[i].x;
+      point.y = organized_cloud->points[i].y;
+      point.z = organized_cloud->points[i].z;
+      point.intensity = organized_cloud->points[i].intensity;
+
+      float range = std::sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
+
+      if (range > 10) {
+        continue;
+      }
+
+      filtered_organized_cloud->push_back(point);
+
+    }
+
     pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_organized_cloud(new pcl::PointCloud<pcl::PointXYZI>);
 
     pcl::transformPointCloud(*edge_points, *transformed_edge_points, body_tform_velodyne);
     pcl::transformPointCloud(*flat_points, *transformed_flat_points, body_tform_velodyne);
-    pcl::transformPointCloud(*organized_cloud, *transformed_organized_cloud, body_tform_velodyne);
+    pcl::transformPointCloud(*filtered_organized_cloud, *transformed_organized_cloud, body_tform_velodyne);
 
     pcl::toROSMsg(*transformed_edge_points, temp_edge_points);
     pcl::toROSMsg(*transformed_flat_points, temp_flat_points);

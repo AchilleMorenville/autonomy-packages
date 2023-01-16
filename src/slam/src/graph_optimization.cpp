@@ -454,7 +454,7 @@ private:
       local_map_flat_points,
       kdtree_local_map_edge_points,
       kdtree_local_map_flat_points,
-      0.2
+      0.1
     );
 
     estimated_displacement = getDifferenceTransformation(poses_6D[poses_6D.size() - 1], optimized_pose_6D);
