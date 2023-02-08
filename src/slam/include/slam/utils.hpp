@@ -15,6 +15,7 @@
 #include <mutex>
 #include <unordered_set>
 #include <unordered_map>
+#include <fstream>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>

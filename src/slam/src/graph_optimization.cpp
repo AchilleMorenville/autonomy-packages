@@ -1041,7 +1041,25 @@ private:
 
     octreeVoxelGrid(map, output_map, resolution);
 
-    pcl::io::savePCDFileASCII(request->destination, *output_map);
+    pcl::io::savePCDFileASCII(std::string(request->destination) + std::string("/map_go.pcd"), *output_map);
+
+    std::ofstream output_file_timestamps(std::string(request->destination) + std::string("/timestamps.txt"));
+    std::ofstream output_file_transformations(std::string(request->destination) + std::string("/transforms.txt"));
+
+    output_file_timestamps << poses_3D_size << "\n";
+
+    for (int i = 0; i < poses_3D_size; ++i) {
+
+      mtx.lock();
+      output_file_timestamps << key_frames_headers[i].stamp.sec << "\n";
+      output_file_timestamps << key_frames_headers[i].stamp.nanosec << "\n";
+
+      output_file_transformations << poses_6D[i] << "\n";
+      mtx.unlock();
+    }
+
+    output_file_timestamps.close();
+    output_file_transformations.close();
 
     response->success = true;
     response->message = std::string("");
