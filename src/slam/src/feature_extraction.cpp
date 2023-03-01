@@ -93,7 +93,7 @@ public:
 
 
 
-    publisher_ = this->create_publisher<slam::msg::Cloud>("slam/cloud", 10);
+    publisher_ = this->create_publisher<slam::msg::Cloud>("slam/features", 10);
 
     allocateMemory();
 

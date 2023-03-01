@@ -25,6 +25,8 @@ find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(autonomous_interfaces)
 find_package(GTSAM REQUIRED)
+find_package(dynamicEDT3D REQUIRED)
+find_package(octomap REQUIRED)
 
 # include_directories(
 #   ${PCL_INCLUDE_DIRS}
@@ -42,6 +44,11 @@ include_directories(
   include/slam
 )
 
+include_directories(${OCTOMAP_INCLUDE_DIRS})
+# target_link_libraries(${OCTOMAP_LIBRARIES})
+include_directories(${DYNAMICEDT3D_INCLUDE_DIRS})
+link_directories(${DYNAMICEDT3D_LIBRARY_DIRS})
+
 rosidl_generate_interfaces(${PROJECT_NAME} "msg/Cloud.msg" DEPENDENCIES std_msgs sensor_msgs)
 
 # ament_export_dependencies(rosidl_default_runtime)
@@ -55,10 +62,22 @@ ament_target_dependencies(feature_extraction rclcpp std_msgs std_srvs sensor_msg
 target_link_libraries(feature_extraction ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(feature_extraction ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+add_executable(lidar_odometry src/lidar_odometry.cpp src/optimization.cpp src/utils.cpp)
+# target_link_libraries(lidar_odometry ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+ament_target_dependencies(lidar_odometry rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces nav_msgs)
+target_link_libraries(lidar_odometry ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+# rosidl_target_interfaces(lidar_odometry ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+add_executable(monte_carlo_localization src/monte_carlo_localization.cpp src/utils.cpp)
+# target_link_libraries(monte_carlo_localization ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+ament_target_dependencies(monte_carlo_localization rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces nav_msgs octomap dynamicEDT3D)
+target_link_libraries(monte_carlo_localization ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OCTOMAP_LIBRARIES} ${DYNAMICEDT3D_LIBRARIES} "${cpp_typesupport_target}")
+# rosidl_target_interfaces(monte_carlo_localization ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 add_executable(graph_optimization src/graph_optimization.cpp src/optimization.cpp src/utils.cpp)
 # target_link_libraries(graph_optimization ${PCL_LIBRARIES} gtsam ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
-ament_target_dependencies(graph_optimization rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM nav_msgs)
-target_link_libraries(graph_optimization gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+ament_target_dependencies(graph_optimization rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM nav_msgs octomap dynamicEDT3D)
+target_link_libraries(graph_optimization gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OCTOMAP_LIBRARIES} ${DYNAMICEDT3D_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 add_executable(save_map src/save_map.cpp src/utils.cpp)
@@ -70,6 +89,8 @@ target_link_libraries(save_map gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp
 install(TARGETS
   feature_extraction
   graph_optimization
+  lidar_odometry
+  monte_carlo_localization
   save_map
   DESTINATION lib/${PROJECT_NAME}
 )

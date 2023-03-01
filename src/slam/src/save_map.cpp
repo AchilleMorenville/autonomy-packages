@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 
   auto request_save = std::make_shared<autonomous_interfaces::srv::SlamSaveMap::Request>();
   request_save->resolution = 0.01;
-  request_save->destination = std::string("/ros2_ws/data/map_go.pcd");
+  request_save->destination = std::string("/ros2_ws/data");
 
   while (!save_client->wait_for_service(1s)) {
     if (!rclcpp::ok()) {
