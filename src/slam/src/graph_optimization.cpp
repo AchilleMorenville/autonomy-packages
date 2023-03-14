@@ -12,10 +12,12 @@
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/inference/Symbol.h>
 
+#include <dynamicEDT3D/dynamicEDT3D.h>
 #include <dynamicEDT3D/dynamicEDTOctomap.h>
 #include <octomap/octomap.h>
 #include <octomap/math/Utils.h>
 #include <octomap/OcTree.h>
+
 
 using namespace std::chrono_literals;
 
@@ -132,6 +134,8 @@ public:
     srv_Stop = this->create_service<std_srvs::srv::Trigger>("slam/stop", std::bind(&GraphOptimization::stopProcess, this, std::placeholders::_1, std::placeholders::_2));
     srv_Reset = this->create_service<std_srvs::srv::Trigger>("slam/reset", std::bind(&GraphOptimization::resetProcess, this, std::placeholders::_1, std::placeholders::_2));
 
+    publisher_map_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("slam/map", 10);
+
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_buffer_->setUsingDedicatedThread(true);
 
@@ -153,6 +157,19 @@ public:
       }
 
       performLoopClosure();
+    }
+  }
+
+  void mapVisualizationThread() {
+    rclcpp::Rate rate(loop_closure_frequency);
+    while (rclcpp::ok()) {
+      rate.sleep();
+
+      if (process_stopped) {
+        continue;
+      }
+
+      publishMap();
     }
   }
 
@@ -203,6 +220,7 @@ private:
   pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_flat;
 
   pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_ICP;
+  // pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_map;
 
   pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_edge_loop_closure;
   pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_flat_loop_closure;
@@ -286,6 +304,8 @@ private:
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Stop;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_Reset;
 
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_map_;
+
   // tf2
   // std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -311,6 +331,7 @@ private:
     voxel_grid_edge.setLeafSize(edge_leaf_size, edge_leaf_size, edge_leaf_size);
 
     voxel_grid_ICP.setLeafSize(ICP_leaf_size, ICP_leaf_size, ICP_leaf_size);
+    // voxel_grid_map.setLeafSize(edge_leaf_size, edge_leaf_size, edge_leaf_size);
 
     voxel_grid_flat_loop_closure.setLeafSize(flat_leaf_size, flat_leaf_size, flat_leaf_size);
     voxel_grid_edge_loop_closure.setLeafSize(edge_leaf_size, edge_leaf_size, edge_leaf_size);
@@ -1042,6 +1063,55 @@ private:
     }
   }
 
+  void publishMap() {
+    if (poses_3D->points.empty()) {
+      return;
+    }
+
+    pcl::PointCloud<pcl::PointXYZI>::Ptr map(new pcl::PointCloud<pcl::PointXYZI>);
+
+    mtx.lock();
+    int poses_3D_size = (int) poses_3D->points.size();
+    mtx.unlock();
+
+    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_map;
+    voxel_grid_map.setLeafSize(0.05, 0.05, 0.05);
+    
+    for (int i = 0; i < poses_3D_size; ++i) {
+
+      pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_key_frame_all_points(new pcl::PointCloud<pcl::PointXYZI>);
+
+      mtx.lock();
+      voxel_grid_map.setInputCloud(key_frames_all_points[i]);
+      voxel_grid_map.filter(*transformed_key_frame_all_points);
+      pcl::transformPointCloud(*transformed_key_frame_all_points, *transformed_key_frame_all_points, poses_6D[i]);
+      mtx.unlock();
+
+      *map += *transformed_key_frame_all_points;
+    }
+
+    // pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_map;
+    // voxel_grid_map.setLeafSize(resolution, resolution, resolution);
+    // voxel_grid_map.setInputCloud(map);
+    // voxel_grid_map.filter(*map);
+
+    pcl::PointCloud<pcl::PointXYZI>::Ptr output_map(new pcl::PointCloud<pcl::PointXYZI>);
+
+    octreeVoxelGrid(map, output_map, 0.1);
+
+    sensor_msgs::msg::PointCloud2 temp_map_points;
+    pcl::toROSMsg(*output_map, temp_map_points);
+
+    temp_map_points.header.frame_id = "global_map";
+
+    mtx.lock();
+    temp_map_points.header.stamp = input_header.stamp;
+    mtx.unlock();
+
+    publisher_map_->publish(temp_map_points);
+
+  }
+
   void saveMap(const std::shared_ptr<autonomous_interfaces::srv::SlamSaveMap::Request> request, std::shared_ptr<autonomous_interfaces::srv::SlamSaveMap::Response> response) {
     
     pcl::PointCloud<pcl::PointXYZI>::Ptr map(new pcl::PointCloud<pcl::PointXYZI>);
@@ -1304,12 +1374,14 @@ int main(int argc, char * argv[]) {
   RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Graph Optimization Started.\033[0m");
 
   std::thread loopThread(&GraphOptimization::loopClosureThread, GO);
+  // std::thread mapThread(&GraphOptimization::mapVisualizationThread, GO);
 
   exec.spin();
 
   rclcpp::shutdown();
 
   loopThread.join();
+  // mapThread.join();
 
   return 0;
 }

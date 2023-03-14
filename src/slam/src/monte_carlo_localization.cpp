@@ -51,6 +51,8 @@ public:
       "spot_driver/fiducials", 10, std::bind(&MonteCarloLocalization::fiducialsHandler, this, std::placeholders::_1), fiducials_options
     );
 
+    publisher_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("slam/localization", 10);
+
     allocateMemory();
 
     loadMap();
@@ -103,6 +105,8 @@ private:
 
   rclcpp::Subscription<autonomous_interfaces::msg::Fiducials>::SharedPtr subscription_fiducials_;
   rclcpp::CallbackGroup::SharedPtr callback_group_fiducials;
+
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisher_pose_;
 
   // Particles
   std::vector<Eigen::Matrix4f> particles;
@@ -230,6 +234,24 @@ private:
         best_particles = particles[i];
       }
     }
+
+    geometry_msgs::msg::PoseStamped pose_msg;
+
+    pose_msg.header.frame_id = "map";
+    pose_msg.header.stamp = this->get_clock()->now();
+
+    pose_msg.pose.position.x = best_particles(0, 3);
+    pose_msg.pose.position.y = best_particles(1, 3);
+    pose_msg.pose.position.z = best_particles(2, 3);
+
+    Eigen::Quaternionf quat(best_particles.block<3, 3>(0, 0));
+
+    pose_msg.pose.orientation.x = quat.x();
+    pose_msg.pose.orientation.y = quat.y();
+    pose_msg.pose.orientation.z = quat.z();
+    pose_msg.pose.orientation.w = quat.w();
+
+    publisher_pose_->publish(pose_msg);
 
     resample();
 

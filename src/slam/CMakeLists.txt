@@ -16,6 +16,7 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(Eigen REQUIRED)
@@ -86,12 +87,19 @@ ament_target_dependencies(save_map rclcpp std_msgs std_srvs sensor_msgs geometry
 target_link_libraries(save_map gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
 # rosidl_target_interfaces(graph_optimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+add_executable(map_publisher src/map_publisher.cpp src/utils.cpp)
+# target_link_libraries(map_publisher ${PCL_LIBRARIES} gtsam ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+ament_target_dependencies(map_publisher rclcpp std_msgs std_srvs sensor_msgs geometry_msgs tf2 tf2_ros PCL pcl_conversions Eigen OpenCV autonomous_interfaces GTSAM nav_msgs)
+target_link_libraries(map_publisher gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} "${cpp_typesupport_target}")
+# rosidl_target_interfaces(map_publisher ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 install(TARGETS
   feature_extraction
   graph_optimization
   lidar_odometry
   monte_carlo_localization
   save_map
+  map_publisher
   DESTINATION lib/${PROJECT_NAME}
 )
 

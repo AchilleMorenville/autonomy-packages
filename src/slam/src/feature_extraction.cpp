@@ -759,6 +759,9 @@ int main(int argc, char * argv[]) {
   // rclcpp::executors::SingleThreadedExecutor exec;
   auto feature_extraction_node = std::make_shared<FeatureExtraction>();
   exec.add_node(feature_extraction_node);
+
+  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Feature Extraction Started.\033[0m");
+
   exec.spin();
   rclcpp::shutdown();
   return 0;
