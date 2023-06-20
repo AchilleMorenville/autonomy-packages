@@ -23,9 +23,15 @@ def generate_launch_description():
             get_package_share_directory('aut_launch'), 'launch'),
             '/velodyne_launch.py'])
         )
+    spot_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('aut_spot'), 'launch'),
+            '/spot_launch.py'])
+        )
 
     return LaunchDescription([
         slam_launch,
         lidar_odometry_launch,
-        velodyne_launch
+        velodyne_launch,
+        spot_launch
     ])
