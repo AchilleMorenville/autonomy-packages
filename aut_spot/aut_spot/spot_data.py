@@ -100,13 +100,13 @@ class SpotData(Node):
 		# Paramerters
 
 		# Connection
-		self.declare_parameter("spot_ip", "ip")
+		self.declare_parameter("spot_ip", "192.168.80.3")
 		self.spot_ip = self.get_parameter("spot_ip").get_parameter_value().string_value
 
-		self.declare_parameter("spot_username", "username")
+		self.declare_parameter("spot_username", "user")
 		self.spot_username = self.get_parameter("spot_username").get_parameter_value().string_value
 
-		self.declare_parameter("spot_password", "password")
+		self.declare_parameter("spot_password", "upsa43jm7vnf")
 		self.spot_password = self.get_parameter("spot_password").get_parameter_value().string_value
 
 		# State
@@ -286,7 +286,7 @@ class SpotData(Node):
 			local_grid_protos[0].local_grid.frame_name_local_grid_data
 		)
 
-		cells_obstacle_dist = list(unpack_grid(local_grid_protos[0]).astype(np.float32))
+		cells_obstacle_dist = unpack_grid(local_grid_protos[0]).astype(np.float32).tolist()
 
 		timestamp = local_grid_protos[0].local_grid.acquisition_time
 
