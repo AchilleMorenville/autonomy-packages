@@ -286,7 +286,7 @@ class SpotData(Node):
 			local_grid_protos[0].local_grid.frame_name_local_grid_data
 		)
 
-		cells_obstacle_dist = unpack_grid(local_grid_protos[0]).astype(np.float32)
+		cells_obstacle_dist = list(unpack_grid(local_grid_protos[0]).astype(np.float32))
 
 		timestamp = local_grid_protos[0].local_grid.acquisition_time
 
