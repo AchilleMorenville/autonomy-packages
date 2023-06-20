@@ -288,7 +288,7 @@ class SpotData(Node):
 
 		cells_obstacle_dist = unpack_grid(local_grid_protos[0]).astype(np.float32)
 
-		timestamp = local_grid_protos[0].acquisition_time
+		timestamp = local_grid_protos[0].acquisition_timestamp
 
 		seconds_real = timestamp.seconds - self.robot.time_sync.get_robot_clock_skew().seconds
 		nanos_real = timestamp.nanos - self.robot.time_sync.get_robot_clock_skew().nanos
