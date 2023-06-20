@@ -14,6 +14,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/msg/transform_stamped.h>
 #include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
@@ -100,14 +101,14 @@ GraphOptimization::GraphOptimization(const rclcpp::NodeOptions& options)
       rclcpp::CallbackGroupType::MutuallyExclusive
   );
 
-  rclcpp::SubscriptionOptions gravity_options = rclcpp::SubscriptionOptions();
-  gravity_options.callback_group = callback_group_gravity_;
+  // rclcpp::SubscriptionOptions gravity_options = rclcpp::SubscriptionOptions();
+  // gravity_options.callback_group = callback_group_gravity_;
 
-  gravity_subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>(
-    "spot_driver/state/gravity", 10, 
-    std::bind(&GraphOptimization::GravityCallBack, this, std::placeholders::_1),
-    gravity_options
-  );
+  // gravity_subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>(
+  //   "spot_driver/state/gravity", 10, 
+  //   std::bind(&GraphOptimization::GravityCallBack, this, std::placeholders::_1),
+  //   gravity_options
+  // );
 
   callback_group_fiducial_ = this->create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive
@@ -136,6 +137,8 @@ GraphOptimization::GraphOptimization(const rclcpp::NodeOptions& options)
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_buffer_->setUsingDedicatedThread(true);
+
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   // Memory allocation
 
@@ -202,16 +205,16 @@ void GraphOptimization::FiducialCallBack(const aut_msgs::msg::Fiducial::SharedPt
   }
 }
 
-void GraphOptimization::GravityCallBack(const geometry_msgs::msg::TransformStamped::SharedPtr gravity_msg) {
-  std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
+// void GraphOptimization::GravityCallBack(const geometry_msgs::msg::TransformStamped::SharedPtr gravity_msg) {
+//   std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
 
-  gravity_msg->header.frame_id = "base_link";
+//   gravity_msg->header.frame_id = "base_link";
 
-  tf_buffer_->setTransform(*gravity_msg, "transform_odometry", false);
-  tf_broadcaster_->sendTransform(*gravity_msg);
+//   tf_buffer_->setTransform(*gravity_msg, "transform_odometry", false);
+//   tf_broadcaster_->sendTransform(*gravity_msg);
 
-  // std::cout << gravity_msg->header.frame_id << "\n";
-}
+//   // std::cout << gravity_msg->header.frame_id << "\n";
+// }
 
 void GraphOptimization::PointCloudWithPoseCallBack(const aut_msgs::msg::PointCloudWithPose::SharedPtr point_cloud_with_pose_msg) {
   {
@@ -781,7 +784,7 @@ void GraphOptimization::SaveMap(const std::shared_ptr<aut_msgs::srv::SaveMap::Re
     state_mtx_.unlock();
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_key_frame_point_cloud(new pcl::PointCloud<pcl::PointXYZI>());
-    aut_utils::OctreeVoxelGrid(transformed_key_frame_point_cloud, filtered_key_frame_point_cloud, 0.02);
+    aut_utils::OctreeVoxelGrid(transformed_key_frame_point_cloud, filtered_key_frame_point_cloud, 0.01);
 
     *map += *filtered_key_frame_point_cloud;
 

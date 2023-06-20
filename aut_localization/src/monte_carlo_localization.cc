@@ -155,20 +155,36 @@ void MonteCarloLocalization::PointCloudWithPoseCallBack(const aut_msgs::msg::Poi
   pcl::PointCloud<pcl::PointXYZI>::Ptr input_point_cloud(new pcl::PointCloud<pcl::PointXYZI>());
   pcl::fromROSMsg(point_cloud_with_pose_msg->point_cloud, *input_point_cloud);
 
+  {
+    std::lock_guard<std::mutex> lock(fiducial_mtx_);
+    if (!found_fiducial_) {
+      return;
+    }
+  }
+
   if (!initialized_) {
+
+    Eigen::Matrix4f base_link_to_fiducial = aut_utils::TransformToMatrix(
+      init_fiducial_.pose
+    );
+
+    Eigen::Matrix4f fiducial_to_base_link = aut_utils::InverseTransformation(base_link_to_fiducial);
 
     Eigen::Matrix4f odom_to_base_link_current = aut_utils::TransformToMatrix(
       point_cloud_with_pose_msg->pose
     );
 
-    Eigen::Matrix4f map_to_base_link_current = Eigen::Matrix4f::Identity() * odom_to_base_link_current;
+    // Eigen::Matrix4f map_to_base_link_current = Eigen::Matrix4f::Identity() * odom_to_base_link_current;
+
+    Eigen::Matrix4f map_to_base_link = map_to_fiducials[init_fiducial_.tag_id] * fiducial_to_base_link;
 
     particles_.clear();
     weights_.clear();
 
     for (int i = 0; i < n_particles_; ++i) {
-      particles_.push_back(map_to_base_link_current * RandomMatrix(0.5, 0.5, 0.5, 0.3, 0.3, 0.3));
+      // particles_.push_back(map_to_base_link_current * RandomMatrix(0.5, 0.5, 0.5, 0.3, 0.3, 0.3));
       // particles_.push_back(map_to_base_link_current);
+      particles_.push_back(map_to_base_link * RandomMatrix(0.1, 0.1, 0.1, 0.1, 0.1, 0.1));
       weights_.push_back(1.0f / n_particles_);
     }
 

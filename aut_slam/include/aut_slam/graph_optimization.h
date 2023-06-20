@@ -13,6 +13,7 @@
 #include <geometry_msgs/msg/transform_stamped.h>
 #include <builtin_interfaces/msg/time.h>
 #include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
@@ -192,6 +193,9 @@ class GraphOptimization : public rclcpp::Node {
 
   // tf buffer
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+
+  // tf2 Listener
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   // Services
   rclcpp::Service<aut_msgs::srv::SaveMap>::SharedPtr save_map_service;

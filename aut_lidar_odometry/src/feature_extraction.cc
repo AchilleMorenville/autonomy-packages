@@ -13,6 +13,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -72,35 +73,37 @@ FeatureExtraction::FeatureExtraction(const rclcpp::NodeOptions& options)
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_buffer_->setUsingDedicatedThread(true);
 
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
   // Callback gropus
-  callback_group_odom_ = this->create_callback_group(
-      rclcpp::CallbackGroupType::MutuallyExclusive
-  );
+  // callback_group_odom_ = this->create_callback_group(
+  //     rclcpp::CallbackGroupType::MutuallyExclusive
+  // );
 
-  rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
-  odom_options.callback_group = callback_group_odom_;
+  // rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
+  // odom_options.callback_group = callback_group_odom_;
 
-  // Subscriptions
+  // // Subscriptions
+  // // v_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
+  // //     "aut_spot/odometry/v_odom", 10,
+  // //     std::bind(&FeatureExtraction::VOdomCallBack, this, 
+  // //               std::placeholders::_1),
+  // //     odom_options
+  // // ); TODO: Get other data
+
   // v_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-  //     "aut_spot/odometry/v_odom", 10,
+  //     "/spot_driver/odometry/vo_odom", 10,
   //     std::bind(&FeatureExtraction::VOdomCallBack, this, 
   //               std::placeholders::_1),
   //     odom_options
-  // ); TODO: Get other data
+  // );
 
-  v_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/spot_driver/odometry/vo_odom", 10,
-      std::bind(&FeatureExtraction::VOdomCallBack, this, 
-                std::placeholders::_1),
-      odom_options
-  );
-
-  k_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/spot_driver/odometry/ko_odom", 10, 
-      std::bind(&FeatureExtraction::KOdomCallBack, this, 
-                std::placeholders::_1), 
-      odom_options
-  );
+  // k_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
+  //     "/spot_driver/odometry/ko_odom", 10, 
+  //     std::bind(&FeatureExtraction::KOdomCallBack, this, 
+  //               std::placeholders::_1), 
+  //     odom_options
+  // );
 
   point_cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
       "velodyne_points", 10, 
@@ -148,35 +151,35 @@ void FeatureExtraction::ResetState() {
   flat_points_scan_ds_->clear();
 } 
 
-void FeatureExtraction::KOdomCallBack(
-    const nav_msgs::msg::Odometry::SharedPtr k_odom_msg) {
-  geometry_msgs::msg::TransformStamped tf_stamped;
-  tf_stamped.header = k_odom_msg->header;
-  tf_stamped.child_frame_id = k_odom_msg->child_frame_id;
-  tf_stamped.transform.translation.x = k_odom_msg->pose.pose.position.x;
-  tf_stamped.transform.translation.y = k_odom_msg->pose.pose.position.y;
-  tf_stamped.transform.translation.z = k_odom_msg->pose.pose.position.z;
-  tf_stamped.transform.rotation = k_odom_msg->pose.pose.orientation;
-  {
-    std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-    tf_buffer_->setTransform(tf_stamped, "k_odom", false);
-  }
-}
+// void FeatureExtraction::KOdomCallBack(
+//     const nav_msgs::msg::Odometry::SharedPtr k_odom_msg) {
+//   geometry_msgs::msg::TransformStamped tf_stamped;
+//   tf_stamped.header = k_odom_msg->header;
+//   tf_stamped.child_frame_id = k_odom_msg->child_frame_id;
+//   tf_stamped.transform.translation.x = k_odom_msg->pose.pose.position.x;
+//   tf_stamped.transform.translation.y = k_odom_msg->pose.pose.position.y;
+//   tf_stamped.transform.translation.z = k_odom_msg->pose.pose.position.z;
+//   tf_stamped.transform.rotation = k_odom_msg->pose.pose.orientation;
+//   {
+//     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
+//     tf_buffer_->setTransform(tf_stamped, "k_odom", false);
+//   }
+// }
 
-void FeatureExtraction::VOdomCallBack(
-    const nav_msgs::msg::Odometry::SharedPtr v_odom_msg) {
-  geometry_msgs::msg::TransformStamped tf_stamped;
-  tf_stamped.header = v_odom_msg->header;
-  tf_stamped.child_frame_id = v_odom_msg->child_frame_id;
-  tf_stamped.transform.translation.x = v_odom_msg->pose.pose.position.x;
-  tf_stamped.transform.translation.y = v_odom_msg->pose.pose.position.y;
-  tf_stamped.transform.translation.z = v_odom_msg->pose.pose.position.z;
-  tf_stamped.transform.rotation = v_odom_msg->pose.pose.orientation;
-  {
-    std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-    tf_buffer_->setTransform(tf_stamped, "v_odom", false);
-  }
-}
+// void FeatureExtraction::VOdomCallBack(
+//     const nav_msgs::msg::Odometry::SharedPtr v_odom_msg) {
+//   geometry_msgs::msg::TransformStamped tf_stamped;
+//   tf_stamped.header = v_odom_msg->header;
+//   tf_stamped.child_frame_id = v_odom_msg->child_frame_id;
+//   tf_stamped.transform.translation.x = v_odom_msg->pose.pose.position.x;
+//   tf_stamped.transform.translation.y = v_odom_msg->pose.pose.position.y;
+//   tf_stamped.transform.translation.z = v_odom_msg->pose.pose.position.z;
+//   tf_stamped.transform.rotation = v_odom_msg->pose.pose.orientation;
+//   {
+//     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
+//     tf_buffer_->setTransform(tf_stamped, "v_odom", false);
+//   }
+// }
 
 void FeatureExtraction::PointCloudCallBack(
     const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg) {
@@ -229,8 +232,8 @@ bool FeatureExtraction::CanProcessPointCloud() {
   bool can_transform_end = false;
   {
     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-    can_transform_start = tf_buffer_->canTransform("vision", "body", rclcpp::Time(current_start_time_cloud_));
-    can_transform_end = tf_buffer_->canTransform("vision", "body", rclcpp::Time(current_end_time_cloud_));
+    can_transform_start = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
+    can_transform_end = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_));
   }
 
   if (!can_transform_start || !can_transform_end) {
@@ -247,8 +250,8 @@ void FeatureExtraction::PreprocessPointCloud() {
 
   {
     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-    transform_start_ = tf_buffer_->lookupTransform("vision", "body", rclcpp::Time(current_start_time_cloud_));
-    transform_end_ = tf_buffer_->lookupTransform("vision", "body", rclcpp::Time(current_end_time_cloud_));
+    transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
+    transform_end_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_));
   }
 
   rotation_start_ = Eigen::Quaternionf(transform_start_.transform.rotation.w, 

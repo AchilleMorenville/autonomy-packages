@@ -11,6 +11,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -142,6 +143,9 @@ class FeatureExtraction : public rclcpp::Node {
 
   // tf buffer
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+
+  // tf2 Listener
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   // Subscriptions
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr v_odom_subscription_;
