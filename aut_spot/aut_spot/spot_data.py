@@ -276,7 +276,7 @@ class SpotData(Node):
 			self.get_logger().info('Published fiducial')
 
 	def local_grids_call_back(self):
-		local_grid_protos = local_grid_client.get_local_grids(["obstacle_distance"])
+		local_grid_protos = self.local_grid_client.get_local_grids(["obstacle_distance"])
 
 		local_grid_transforms = local_grid_protos[0].local_grid.transforms_snapshot
 
