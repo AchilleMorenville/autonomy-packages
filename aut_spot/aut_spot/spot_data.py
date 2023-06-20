@@ -118,8 +118,8 @@ class SpotData(Node):
 		self.spot_fiducials_frequency = self.get_parameter("spot_fiducials_frequency").get_parameter_value().integer_value
 
 		# LocalMap
-		self.declare_parameter("spot_local_map_frequency", 10)
-		self.spot_local_map_frequency = self.get_parameter("spot_local_map_frequency").get_parameter_value().integer_value
+		self.declare_parameter("spot_local_grid_frequency", 10)
+		self.spot_local_grid_frequency = self.get_parameter("spot_local_grid_frequency").get_parameter_value().integer_value
 
 		# # Publishers
 		# self.ko_publisher = self.create_publisher(Odometry, "aut_spot/odometry/k_odom", 10)
@@ -155,7 +155,7 @@ class SpotData(Node):
 		# Launch LocalGrids
 		self.local_grid_client = self.robot.ensure_client(LocalGridClient.default_service_name)
 
-		timer_period_local_grids = 1.0 / self.spot_local_grids_frequency
+		timer_period_local_grids = 1.0 / self.spot_local_grid_frequency
 		self.timer_local_grids = self.create_timer(timer_period_local_grids, self.local_grids_call_back)
 
 	def state_call_back(self):
