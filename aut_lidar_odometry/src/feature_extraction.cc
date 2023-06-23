@@ -236,18 +236,23 @@ bool FeatureExtraction::CanProcessPointCloud() {
   bool can_transform_end = false;
   {
     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-    can_transform_start = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
-    can_transform_end = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_));
+
+    std::string* err1 = new std::string();
+    std::string* err2 = new std::string();
+
+    can_transform_start = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_), rclcpp::Duration::from_seconds(0.05), err1);
+    can_transform_end = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_), rclcpp::Duration::from_seconds(0.05), err2);
+  
+    RCLCPP_INFO(this->get_logger(), (*err1).c_str());
+    RCLCPP_INFO(this->get_logger(), (*err2).c_str());
   }
 
   if (!can_transform_start) {
     RCLCPP_INFO(this->get_logger(), "Cannot transform start");
-    transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
   }
 
   if (!can_transform_end) {
     RCLCPP_INFO(this->get_logger(), "Cannot transform end");
-    transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
   }
 
   if (!can_transform_start || !can_transform_end) {
