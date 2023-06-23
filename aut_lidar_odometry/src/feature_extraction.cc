@@ -194,6 +194,7 @@ void FeatureExtraction::PointCloudCallBack(
   }
 
   if (!CanProcessPointCloud()) {
+    RCLCPP_INFO(this->get_logger(), "Cannot process cloud");
     return;
   } else {
     cache_point_cloud_msg_.pop_front();
@@ -234,6 +235,14 @@ bool FeatureExtraction::CanProcessPointCloud() {
     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
     can_transform_start = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
     can_transform_end = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_));
+  }
+
+  if (!can_transform_start) {
+    RCLCPP_INFO(this->get_logger(), "Cannot transform start");
+  }
+
+  if (!can_transform_end) {
+    RCLCPP_INFO(this->get_logger(), "Cannot transform end");
   }
 
   if (!can_transform_start || !can_transform_end) {
