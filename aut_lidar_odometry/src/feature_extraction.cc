@@ -242,10 +242,12 @@ bool FeatureExtraction::CanProcessPointCloud() {
 
   if (!can_transform_start) {
     RCLCPP_INFO(this->get_logger(), "Cannot transform start");
+    transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
   }
 
   if (!can_transform_end) {
     RCLCPP_INFO(this->get_logger(), "Cannot transform end");
+    transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
   }
 
   if (!can_transform_start || !can_transform_end) {
