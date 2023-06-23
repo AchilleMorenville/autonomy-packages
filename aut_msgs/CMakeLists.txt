@@ -11,6 +11,9 @@ set(msg_files
   "msg/PointCloudWithPose.msg"
   "msg/LocalGrid.msg"
   "msg/Fiducial.msg"
+  "msg/Nav.msg"
+  "msg/NavModif.msg"
+  "msg/NavCommand.msg"
 )
 
 set(srv_files

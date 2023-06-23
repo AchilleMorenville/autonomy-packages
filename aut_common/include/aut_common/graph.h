@@ -24,8 +24,10 @@ class Graph {
   
   float GetEuclideanDist(int id1, int id2);
   bool AStar(int start, int goal, std::vector<int> &path);
-  int ClosestNode(Eigen::Matrix4f map_tform_pose);
+  int ClosestNode(Eigen::Matrix4f pose);
+  int ClosestNode(Eigen::Vector3f position);
   std::vector<int> GetEdges(int id);
+  Eigen::Matrix4f GetPose(int id);
   
   void SaveFile(std::string file_path);
   void LoadFile(std::string file_path);

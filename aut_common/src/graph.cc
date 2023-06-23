@@ -166,6 +166,13 @@ std::vector<int> Graph::GetEdges(int id) {
   return graph_[id];
 }
 
+Eigen::Matrix4f Graph::GetPose(int id) {
+  if (graph_.find(id) == graph_.end()) {
+    return Eigen::Matrix4f::Zero(); // Return empty vector
+  }
+  return poses_[id];
+}
+
 float Graph::GetEuclideanDist(int id1, int id2) {
   return (poses_[id1].block<3, 1>(0, 3) - poses_[id2].block<3, 1>(0, 3)).norm();
 }
@@ -245,18 +252,24 @@ bool Graph::AStar(int start, int goal, std::vector<int> &path) {
   return false;
 }
 
-int Graph::ClosestNode(Eigen::Matrix4f map_tform_pose) {
+int Graph::ClosestNode(Eigen::Matrix4f pose) {
+  Eigen::Vector3f position = pose.block<3, 1>(0, 3);
+  return ClosestNode(position);
+}
+
+int Graph::ClosestNode(Eigen::Vector3f position) {
   int closest_idx = -1;
   float closest_dist = std::numeric_limits<float>::max();
   for (auto& it: graph_) {
-    Eigen::Matrix4f pose_tform_node = aut_utils::InverseTransformation(map_tform_pose) * poses_[it.first];
-    if (std::abs(pose_tform_node(2, 3)) < 1 && pose_tform_node.block<3, 1>(0, 3).norm() < closest_dist) {
-      closest_dist = pose_tform_node.block<3, 1>(0, 3).norm();
+
+    Eigen::Vector3f bewteen_vector = poses_[it.first].block<3, 1>(0, 3) - position;
+    float dist = bewteen_vector.squaredNorm();
+    if (std::abs(bewteen_vector(2)) < 1 && dist < closest_dist) {
+      closest_dist = dist;
       closest_idx = it.first;
     }
   }
   return closest_idx;
-
 }
 
 void Graph::SaveFile(std::string file_path) {

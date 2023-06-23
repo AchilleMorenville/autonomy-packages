@@ -10,6 +10,9 @@ find_package(aut_utils REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(aut_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
+
 
 include_directories(
   include
@@ -19,13 +22,13 @@ include_directories(
 add_library(global_planner_impl SHARED
   src/global_planner.cc
 )
-ament_target_dependencies(global_planner_impl rclcpp aut_common aut_utils Eigen3 visualization_msgs tf2_ros)
+ament_target_dependencies(global_planner_impl rclcpp aut_common aut_utils Eigen3 visualization_msgs tf2_ros aut_msgs rclcpp_action)
 target_link_libraries(global_planner_impl ${Eigen3_LIBRARIES})
  
 add_executable(global_planner
   src/main.cc
 )
-ament_target_dependencies(global_planner rclcpp aut_common aut_utils Eigen3 visualization_msgs tf2_ros)
+ament_target_dependencies(global_planner rclcpp aut_common aut_utils Eigen3 visualization_msgs tf2_ros aut_msgs rclcpp_action)
 target_link_libraries(global_planner global_planner_impl ${Eigen3_LIBRARIES})
 
 install(TARGETS global_planner_impl
@@ -42,8 +45,10 @@ install(DIRECTORY include/
   DESTINATION include/
 )
 
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+
 ament_export_include_directories(include)
 ament_export_libraries(global_planner_impl)
-ament_export_dependencies(rclcpp aut_common aut_utils Eigen3 visualization_msgs tf2_ros)
+ament_export_dependencies(rclcpp aut_common aut_utils Eigen3 visualization_msgs tf2_ros aut_msgs rclcpp_action)
 
 ament_package()

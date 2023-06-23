@@ -24,7 +24,7 @@ class MapPublisher : public rclcpp::Node {
     publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("aut_map_publisher/map", 10);
     marker_array_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("aut_map_publisher/graph", 10);
     timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&MapPublisher::timer_callback, this));
-    std::string map_path("old/data/map.pcd");
+    std::string map_path("/ros2_ws/src/data/first-new-map/map.pcd");
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr map_cloud(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::io::loadPCDFile<pcl::PointXYZI> (map_path, *map_cloud);
@@ -32,24 +32,13 @@ class MapPublisher : public rclcpp::Node {
     pcl::toROSMsg(*map_cloud, map_msg);
     map_msg.header.frame_id = "map";
 
-    std::string graph_path("old/data/graph.txt");
+    std::string graph_path("/ros2_ws/src/data/first-new-map/graph.txt");
     nav_graph_.LoadFile(graph_path);
 
     nav_graph_.Simplify(1.0);
     nav_graph_.TidyGraph();
 
-    int idx_0 = nav_graph_.ClosestNode(Eigen::Matrix4f::Identity());
-
-    Eigen::Matrix4f pose_2 = Eigen::Matrix4f::Identity();
-    pose_2(0, 3) = 0.21;
-    pose_2(1, 3) = -8.4;
-    pose_2(2, 3) = -2.8;
-    int idx_1 = nav_graph_.ClosestNode(pose_2);
-
-    std::vector<int> path;
-    nav_graph_.AStar(idx_0, idx_1, path);
-
-    marker_array_msg = nav_graph_.GetMarkerArrayWithPath(path);
+    marker_array_msg = nav_graph_.GetMarkerArray();
   }
 
  private:

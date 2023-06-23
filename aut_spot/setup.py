@@ -24,7 +24,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'spot_data = aut_spot.spot_data:main'
+            'spot_data = aut_spot.spot_data:main',
+            'spot_command = aut_spot.spot_command:main'
         ],
     },
 )
