@@ -39,6 +39,8 @@ FeatureExtraction::FeatureExtraction(const rclcpp::NodeOptions& options)
   this->declare_parameter("max_cache_size", 2);
   max_cache_size_ = this->get_parameter("max_cache_size").get_parameter_value().get<int>();    
 
+  RCLCPP_INFO(this->get_logger(), "Received cloud");
+
   this->declare_parameter("max_lidar_range", 30.0f);
   max_lidar_range_ = this->get_parameter("max_lidar_range").get_parameter_value().get<float>();
 
@@ -189,16 +191,17 @@ void FeatureExtraction::PointCloudCallBack(
   RCLCPP_INFO(this->get_logger(), "Received cloud");
 
   cache_point_cloud_msg_.push_back(*point_cloud_msg);
-  if ((int) cache_point_cloud_msg_.size() > max_cache_size_) {
-    cache_point_cloud_msg_.pop_front();
+  if ((int) cache_point_cloud_msg_.size() <= max_cache_size_) {
+    return;
+    // cache_point_cloud_msg_.pop_front();
   }
 
   if (!CanProcessPointCloud()) {
     RCLCPP_INFO(this->get_logger(), "Cannot process cloud");
-    return;
-  } else {
     cache_point_cloud_msg_.pop_front();
+    return;
   }
+  cache_point_cloud_msg_.pop_front();
 
   PreprocessPointCloud();
 
