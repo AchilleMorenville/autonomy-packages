@@ -85,7 +85,7 @@ void GlobalPlanner::LoadMapService(const std::shared_ptr<aut_msgs::srv::LoadMap:
   std::string path_to_graph = std::string(request->map_directory_path) + std::string("/graph.txt");
 
   nav_graph_.LoadFile(path_to_graph);
-  nav_graph_.Simplify(1.0);
+  nav_graph_.Simplify(0.5);
   nav_graph_.TidyGraph();
 
   initialized_ = true;
@@ -237,7 +237,7 @@ void GlobalPlanner::execute(
       if (inaccessible_node_in_path_ < 0) {
         aut_msgs::msg::Nav empty_nav_msg;
         nav_publisher_->publish(empty_nav_msg);
-        
+
         result->success = false;
         goal_handle->abort(result);
         RCLCPP_INFO(this->get_logger(), "Goal aborted, no path feasible");

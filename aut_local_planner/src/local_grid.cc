@@ -91,6 +91,8 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
 
     std::pair<int, int> point_to_follow = GetTarget(path);
 
+    current_point_to_follow_ = point_to_follow;
+
     Eigen::Matrix4f x_axis = Eigen::Matrix4f::Identity();
     x_axis(0, 3) = 1.0f;
 
@@ -370,6 +372,8 @@ nav_msgs::msg::OccupancyGrid LocalGrid::LocalGridToOccupancyGrid() {
   for (int i = 0; i < (int) current_path_.size(); ++i) {
     occupancy_grid.data[current_path_[i].first + 128 * current_path_[i].second] = 100;
   }
+
+  occupancy_grid.data[current_point_to_follow_.first + 128 * current_point_to_follow_.second] = 50;
 
   // float max_h = -std::numeric_limits<float>::max();
   // for (int i = 0; i < (int) h_local_grid.size(); ++i) {

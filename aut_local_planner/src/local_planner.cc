@@ -3,6 +3,7 @@
 #include <memory>
 #include <cmath>
 #include <limits>
+#include <iostream>
 
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
@@ -96,6 +97,10 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
 
   Eigen::Matrix4f base_link_to_local_grid = aut_utils::TransformToMatrix(local_grid_msg->pose);
 
+  Eigen::Matrix4f local_grid_to_gravity = aut_utils::InverseTransformation(base_link_to_local_grid) * base_link_to_gravity;
+
+  std::cout << local_grid_to_gravity << std::endl;
+
   local_grid_.AddLocalGrid(local_grid_msg->local_grid, map_to_base_link, base_link_to_local_grid);
 
   RCLCPP_INFO(this->get_logger(), "Find closest node");
@@ -183,6 +188,9 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
 
   // float heading_angle = std::atan2(direction(1), direction(0));
   float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction) * 180.0f / M_PI;  // Relative to the front of the robot
+  
+  RCLCPP_INFO(this->get_logger(), "Heading angle: %f", heading_angle);
+
   bool is_backward = std::abs(heading_angle) > 90.0f;
 
   // Send command
@@ -304,9 +312,11 @@ aut_msgs::msg::NavCommand LocalPlanner::CreateCommand(Eigen::Vector2f direction,
 
   float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
   if (!is_backward && !down_stairs_ahead) {
+    RCLCPP_INFO(this->get_logger(), "Continue Forward");
     heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
   } else if (!is_on_slope && is_backward && is_rotation_safe && !down_stairs_ahead) {
     // Rotate to be forward
+    RCLCPP_INFO(this->get_logger(), "Rotate to be forward");
     std::cout << "Rotate to be forward\n";
     heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
   } else if (is_backward && !up_stairs_ahead) {

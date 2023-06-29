@@ -62,6 +62,7 @@ class LocalGrid {
   Eigen::Matrix4f base_link_to_local_grid_;
 
   std::vector<std::pair<int, int>> current_path_;
+  std::pair<int, int> current_point_to_follow_;
 
 };
 
