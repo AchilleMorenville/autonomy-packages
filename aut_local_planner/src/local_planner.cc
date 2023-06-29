@@ -351,13 +351,13 @@ aut_msgs::msg::NavCommand LocalPlanner::CreateCommand(Eigen::Vector2f direction,
   float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
   if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
     // If the robot is mostly forward then continue to go forward
-    nav_command_msg.angle = heading_angle;
+    nav_command_msg.angle = -heading_angle;
     nav_command_msg.x = direction(0);
     nav_command_msg.y = direction(1);
     nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
   } else {
     // The robot is not forward enough, only rotate 
-    nav_command_msg.angle = heading_angle;
+    nav_command_msg.angle = -heading_angle;
     nav_command_msg.x = 0.0f;
     nav_command_msg.y = 0.0f;
     nav_command_msg.max_speed = 0.2;
