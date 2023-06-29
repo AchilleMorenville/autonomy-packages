@@ -93,7 +93,9 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
 
     Eigen::Matrix4f x_axis = Eigen::Matrix4f::Identity();
     x_axis(0, 3) = 1.0f;
-    std::pair<int, int> indexes_x_axis((int) (x_axis(0, 3) / 0.03f), (int) (x_axis(1, 3) / 0.03f));
+
+    Eigen::Matrix4f local_grid_to_x_axis = local_grid_to_base_link * x_axis;
+    std::pair<int, int> indexes_x_axis((int) (local_grid_to_x_axis(0, 3) / 0.03f), (int) (local_grid_to_x_axis(1, 3) / 0.03f));
 
     Eigen::Vector2f vector_base_link_x;
     vector_base_link_x(0) = (indexes_x_axis.first - start_indexes.first);
@@ -102,7 +104,9 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
 
     Eigen::Matrix4f y_axis = Eigen::Matrix4f::Identity();
     y_axis(1, 3) = 1.0f;
-    std::pair<int, int> indexes_y_axis((int) (y_axis(0, 3) / 0.03f), (int) (y_axis(1, 3) / 0.03f));
+
+    Eigen::Matrix4f local_grid_to_y_axis = local_grid_to_base_link * y_axis;
+    std::pair<int, int> indexes_y_axis((int) (local_grid_to_y_axis(0, 3) / 0.03f), (int) (local_grid_to_y_axis(1, 3) / 0.03f));
 
     Eigen::Vector2f vector_base_link_y;
     vector_base_link_y(0) = (indexes_y_axis.first - start_indexes.first);
@@ -115,7 +119,7 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
 
     direction(0) = vector_target.dot(vector_base_link_x) * 0.03f;
     direction(1) = vector_target.dot(vector_base_link_y) * 0.03f;
-    
+
     // Eigen::Matrix4f local_grid_to_base_link = aut_utils::InverseTransformation(base_link_to_local_grid_);
     // Eigen::Matrix4f base_link_to_x_axis = Eigen::Matrix4f::Identity();
     // base_link_to_x_axis(0, 3) = 1.0f;
