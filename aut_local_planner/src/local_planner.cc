@@ -27,6 +27,8 @@ LocalPlanner::LocalPlanner(const rclcpp::NodeOptions& options)
   has_path_ = false;
   initialized_ = false;
   idx_current_node_ = -1;
+  count_preceeding_stop_ = 0;
+  preceeding_stop_ = -1;
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_buffer_->setUsingDedicatedThread(true);
@@ -163,9 +165,19 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
   if (direction(0) == 0.0f && direction(1) == 0.0f && targets_idx[result] < (int) path_.size() - 1) {
     // send next to result impossible
 
-    aut_msgs::msg::NavModif nav_modif_msg;
-    nav_modif_msg.inaccessible_node_in_path = targets_idx[result] + 1;
-    nav_modif_publisher_->publish(nav_modif_msg);
+    if (preceeding_stop_ == targets_idx[result]) {
+      count_preceeding_stop_++;
+    } else {
+      count_preceeding_stop_ = 0;
+      preceeding_stop_ = targets_idx[result];
+    }
+
+    if (count_preceeding_stop_ > 10) {
+      aut_msgs::msg::NavModif nav_modif_msg;
+      nav_modif_msg.inaccessible_node_in_path = targets_idx[result] + 1;
+      nav_modif_publisher_->publish(nav_modif_msg);
+    }
+
     return;
   }
 
@@ -449,6 +461,8 @@ void LocalPlanner::NavCallBack(const aut_msgs::msg::Nav::SharedPtr nav_msg) {
   }
 
   idx_current_node_ = -1;
+  preceeding_stop_ = -1;
+  count_preceeding_stop_ = 0;
 }
 
 }  // namespace aut_local_planner

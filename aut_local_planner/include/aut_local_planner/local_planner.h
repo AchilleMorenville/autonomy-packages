@@ -43,6 +43,9 @@ class LocalPlanner : public rclcpp::Node {
 
   int idx_current_node_;
 
+  int preceeding_stop_;
+  int count_preceeding_stop_;
+
   std::vector<Eigen::Vector3f> path_;
   // Grid grid_;
   LocalGrid local_grid_;
