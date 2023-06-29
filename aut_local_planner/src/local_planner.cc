@@ -183,7 +183,7 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
 
   // float heading_angle = std::atan2(direction(1), direction(0));
   float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction) * 180.0f / M_PI;  // Relative to the front of the robot
-  bool is_backward = std::abs(heading_angle) * 180.0f / M_PI > 90.0f;
+  bool is_backward = std::abs(heading_angle) > 90.0f;
 
   // Send command
   RCLCPP_INFO(this->get_logger(), "Is backward: %d", is_backward);
