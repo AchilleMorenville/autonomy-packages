@@ -20,6 +20,7 @@
 #include <aut_utils/utils.h>
 #include <aut_msgs/action/navigate_to_goal.hpp>
 #include <aut_msgs/msg/nav.hpp>
+#include <aut_msgs/msg/nav_modif.hpp>
 
 namespace aut_global_planner {
 
@@ -58,6 +59,19 @@ GlobalPlanner::GlobalPlanner(const rclcpp::NodeOptions& options)
   );
 
   load_map_service_ = this->create_service<aut_msgs::srv::LoadMap>("aut_global_planner/load_map", std::bind(&GlobalPlanner::LoadMapService, this, std::placeholders::_1, std::placeholders::_2));
+
+  callback_group_nav_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::MutuallyExclusive
+  );
+
+  rclcpp::SubscriptionOptions nav_options = rclcpp::SubscriptionOptions();
+  nav_options.callback_group = callback_group_nav_;
+
+  nav_modif_subscription_ = this->create_subscription<aut_msgs::msg::NavModif>(
+    "aut_local_planner/nav_modif", 10, 
+    std::bind(&GlobalPlanner::NavModifCallBack, this, std::placeholders::_1),
+    nav_options
+  );
 }
 
 void GlobalPlanner::LoadMapService(const std::shared_ptr<aut_msgs::srv::LoadMap::Request> request, std::shared_ptr<aut_msgs::srv::LoadMap::Response> response) {
@@ -220,6 +234,16 @@ void GlobalPlanner::execute(
     state_mtx_.lock();
     if (nav_graph_has_changed_) {
 
+      if (inaccessible_node_in_path_ < 0) {
+        result->success = false;
+        goal_handle->abort(result);
+        RCLCPP_INFO(this->get_logger(), "Goal aborted, no more path to goal");
+        return;
+      }
+
+      // Modify nav_graph_
+      nav_graph_.RemoveEdge(path_idx[inaccessible_node_in_path_], path_idx[inaccessible_node_in_path_ - 1]);
+
       start_closest_node_idx = nav_graph_.ClosestNode(current_pose);
       start_closest_node_pose = nav_graph_.GetPose(start_closest_node_idx);
       
@@ -283,6 +307,13 @@ void GlobalPlanner::execute(
 
     loop_rate.sleep();
   }
+}
+
+void GlobalPlanner::NavModifCallBack(const aut_msgs::msg::NavModif::SharedPtr nav_modif_msg) {
+  state_mtx_.lock();
+  nav_graph_has_changed_ = true;
+  inaccessible_node_in_path_ = nav_modif_msg->inaccessible_node_in_path;
+  state_mtx_.unlock();
 }
 
 // void GlobalPlanner::timer_callback() {

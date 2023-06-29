@@ -36,7 +36,7 @@ struct by_value {
 FeatureExtraction::FeatureExtraction(const rclcpp::NodeOptions& options)
     : Node("feature_extraction", options) {
       
-  this->declare_parameter("max_cache_size", 2);
+  this->declare_parameter("max_cache_size", 5);
   max_cache_size_ = this->get_parameter("max_cache_size").get_parameter_value().get<int>();    
 
   RCLCPP_INFO(this->get_logger(), "Received cloud");
@@ -191,14 +191,13 @@ void FeatureExtraction::PointCloudCallBack(
   RCLCPP_INFO(this->get_logger(), "Received cloud");
 
   cache_point_cloud_msg_.push_back(*point_cloud_msg);
-  if ((int) cache_point_cloud_msg_.size() <= max_cache_size_) {
-    return;
-    // cache_point_cloud_msg_.pop_front();
+  if ((int) cache_point_cloud_msg_.size() > max_cache_size_) {
+    cache_point_cloud_msg_.pop_front();
   }
 
   if (!CanProcessPointCloud()) {
-    RCLCPP_INFO(this->get_logger(), "Cannot process cloud");
-    cache_point_cloud_msg_.pop_front();
+    RCLCPP_INFO(this->get_logger(), "Cannot process cloud, queue size : %d", (int) cache_point_cloud_msg_.size());
+    // cache_point_cloud_msg_.pop_front();
     return;
   }
   cache_point_cloud_msg_.pop_front();

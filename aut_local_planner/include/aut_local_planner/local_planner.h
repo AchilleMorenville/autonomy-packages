@@ -7,11 +7,15 @@
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <geometry_msgs/msg/transform.hpp>
+
 
 #include <Eigen/Core>
 
 #include <aut_msgs/msg/local_grid.hpp>
 #include <aut_msgs/msg/nav.hpp>
+#include <aut_msgs/msg/nav_modif.hpp>
 #include <aut_msgs/msg/nav_command.hpp>
 // #include <aut_local_planner/grid.h>
 #include <aut_local_planner/local_grid.h>
@@ -24,8 +28,11 @@ class LocalPlanner : public rclcpp::Node {
   explicit LocalPlanner(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
  private:
+
   void LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr local_grid_msg);
   void NavCallBack(const aut_msgs::msg::Nav::SharedPtr nav_msg);
+  nav_msgs::msg::OccupancyGrid LocalGridToOccupancyGrid(std::vector<float> local_grid, geometry_msgs::msg::Transform base_link_to_local_grid);
+  aut_msgs::msg::NavCommand CreateCommand(Eigen::Vector2f direction, bool is_backward, bool is_rotation_safe, bool is_on_slope, bool up_stairs_ahead, bool down_stairs_ahead);
 
   // bool LocalPlanner::IsFreeLocalGrid(Eigen::Vector3f local_grid_to_position);
 
@@ -42,6 +49,8 @@ class LocalPlanner : public rclcpp::Node {
 
   // Publisher
   rclcpp::Publisher<aut_msgs::msg::NavCommand>::SharedPtr nav_command_publisher_;
+  rclcpp::Publisher<aut_msgs::msg::NavModif>::SharedPtr nav_modif_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr occupancy_grid_publisher_;
 
   // Subscription
   rclcpp::Subscription<aut_msgs::msg::LocalGrid>::SharedPtr local_grid_subscription_;

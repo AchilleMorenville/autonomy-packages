@@ -53,17 +53,18 @@ class SpotCommand(Node):
 
 		self.subscription = self.create_subscription(NavCommand, "aut_local_planner/nav_command", self.listener_callback, 10)
 
-		self.params = spot_command_pb2.MobilityParams(
-			vel_limit=geometry_pb2.SE2VelocityLimit(max_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=0.2, y=0.2), angular=0.2), min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-0.2, y=-0.2), angular=-0.2)),
-			locomotion_hint=spot_command_pb2.HINT_AUTO
-		)
-
 		time.sleep(2)
 
 	def listener_callback(self, msg):
+
+		params = spot_command_pb2.MobilityParams(
+			vel_limit=geometry_pb2.SE2VelocityLimit(max_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=msg.max_speed, y=msg.max_speed), angular=0.2), min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-msg.max_speed, y=-msg.max_speed), angular=-0.2)),
+			locomotion_hint=spot_command_pb2.HINT_AUTO
+		)
+
 		end_time_secs = time.time() + 1.0
 		transforms = self.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot
-		command_proto = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(msg.x, msg.y, msg.angle, transforms, params=self.params)
+		command_proto = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(msg.x, msg.y, msg.angle, transforms, params=params)
 		self.command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
 
 

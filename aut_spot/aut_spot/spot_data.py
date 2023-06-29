@@ -1,4 +1,5 @@
 import numpy as np
+import threading
 
 import rclpy
 from rclpy.node import Node
@@ -158,6 +159,8 @@ class SpotData(Node):
 		timer_period_local_grids = 1.0 / self.spot_local_grid_frequency
 		self.timer_local_grids = self.create_timer(timer_period_local_grids, self.local_grids_call_back)
 
+		self.tf_broadcaster_lock = threading.Lock()
+
 	def state_call_back(self):
 		robot_state = self.robot_state_client.get_robot_state()
 
@@ -200,9 +203,10 @@ class SpotData(Node):
 		vo = create_TransformStamped(body_tform_vision, "base_link", "v_odom", stamp_real)
 		grav = create_TransformStamped(body_tform_gravity, "base_link", "gravity", stamp_real)
 
-		self.tf_broadcaster.sendTransform(ko)
-		self.tf_broadcaster.sendTransform(vo)
-		self.tf_broadcaster.sendTransform(grav)
+		with self.tf_broadcaster_lock:
+			self.tf_broadcaster.sendTransform(ko)
+			self.tf_broadcaster.sendTransform(vo)
+			self.tf_broadcaster.sendTransform(grav)
 
 		self.get_logger().info('Published odometries')
 
@@ -270,8 +274,9 @@ class SpotData(Node):
 			self.fiducials_publisher.publish(fiducial)
 
 			fid = create_TransformStamped(body_tform_fiducial, "base_link", f"fiducial_{tag_id}", stamp_real)
-			
-			self.tf_broadcaster.sendTransform(fid)
+
+			with self.tf_broadcaster_lock:
+				self.tf_broadcaster.sendTransform(fid)
 
 			self.get_logger().info('Published fiducial')
 
@@ -319,8 +324,9 @@ class SpotData(Node):
 		self.local_grid_publisher.publish(local_grid)
 
 		lg = create_TransformStamped(body_tform_grid, "base_link", "local_grid", stamp_real)
-			
-		self.tf_broadcaster.sendTransform(lg)
+
+		with self.tf_broadcaster_lock:
+			self.tf_broadcaster.sendTransform(lg)
 
 		self.get_logger().info('Published local grid')
 

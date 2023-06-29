@@ -14,6 +14,7 @@
 #include <aut_msgs/action/navigate_to_goal.hpp>
 #include <aut_msgs/srv/load_map.hpp>
 #include <aut_msgs/msg/nav.hpp>
+#include <aut_msgs/msg/nav_modif.hpp>
 
 namespace aut_global_planner {
 
@@ -43,9 +44,12 @@ class GlobalPlanner : public rclcpp::Node {
 
   void LoadMapService(const std::shared_ptr<aut_msgs::srv::LoadMap::Request> request, std::shared_ptr<aut_msgs::srv::LoadMap::Response> response);
 
+  void NavModifCallBack(const aut_msgs::msg::NavModif::SharedPtr nav_modif_msg);
+
   bool initialized_;
   bool goal_is_set_;
   bool nav_graph_has_changed_;
+  int inaccessible_node_in_path_;
 
   aut_common::Graph nav_graph_;
 
@@ -66,6 +70,12 @@ class GlobalPlanner : public rclcpp::Node {
 
   // Services
   rclcpp::Service<aut_msgs::srv::LoadMap>::SharedPtr load_map_service_;
+
+  // Subscription
+  rclcpp::Subscription<aut_msgs::msg::NavModif>::SharedPtr nav_modif_subscription_;
+
+  // Callback groups
+  rclcpp::CallbackGroup::SharedPtr callback_group_nav_;
 
   // Mutex
   std::mutex state_mtx_;

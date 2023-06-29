@@ -32,6 +32,8 @@ class Graph {
   void SaveFile(std::string file_path);
   void LoadFile(std::string file_path);
 
+  void RemoveEdge(int id1, int id2);
+
   visualization_msgs::msg::MarkerArray GetMarkerArray();
   visualization_msgs::msg::MarkerArray GetMarkerArrayWithPath(std::vector<int> &path);
 
