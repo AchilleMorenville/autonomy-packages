@@ -181,7 +181,8 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
     return;
   }
 
-  float heading_angle = std::atan2(direction(1), direction(0));
+  // float heading_angle = std::atan2(direction(1), direction(0));
+  float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction) * 180.0f / M_PI;  // Relative to the front of the robot
   bool is_backward = std::abs(heading_angle) * 180.0f / M_PI > 90.0f;
 
   // Send command
@@ -284,56 +285,108 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
   // // Send to Spot current goal
 }
 
+float LocalPlanner::GetAngle(Eigen::Vector2f body, Eigen::Vector2f target) {
+
+  float theta = std::acos( (body.dot(target)) / (body.norm() * target.norm()));
+
+  if (target(1) < 0 && body(0) > 0) {
+    theta = - theta;
+  } else if (target(1) > 0 && body(0) < 0) {
+    theta = - theta;
+  }
+  return theta;
+}
+
 aut_msgs::msg::NavCommand LocalPlanner::CreateCommand(Eigen::Vector2f direction, bool is_backward, bool is_rotation_safe, bool is_on_slope, bool up_stairs_ahead, bool down_stairs_ahead) {
 
   aut_msgs::msg::NavCommand nav_command_msg;
 
-  if ((!is_backward && !down_stairs_ahead) || (!is_on_slope && is_backward && is_rotation_safe && !down_stairs_ahead)) {
-    // There is no down stairs ahead and the robot is going forward -> it can continue forward
-    // Or the robot is ok and can turn back forward
-    float heading_angle = std::atan2(direction(1), direction(0));
-
-    RCLCPP_INFO(this->get_logger(), "Continue Forward");
-
-    if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
-      // If the robot is mostly forward then continue to go forward
-      nav_command_msg.angle = heading_angle;
-      nav_command_msg.x = direction(0);
-      nav_command_msg.y = direction(1);
-      nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
-    } else {
-      // The robot is not forward enough, only rotate 
-      nav_command_msg.angle = heading_angle;
-      nav_command_msg.x = 0.0f;
-      nav_command_msg.y = 0.0f;
-      nav_command_msg.max_speed = 0.2;
-    }
-  } else if ((is_backward && !up_stairs_ahead) || (!is_on_slope && !is_backward && is_rotation_safe && !up_stairs_ahead && down_stairs_ahead)) {
-    // If the robot is backward and there is no upstairs ahead then continue backward
-    // if the robot is not on a slope, is not backward, can rotate, with down stairs but without down stairs then rotates
-    float heading_angle = std::atan2(-direction(1), -direction(0)); // TODO: Check if that works
-
-    RCLCPP_INFO(this->get_logger(), "Continue Backward");
-
-    if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
-      // If the robot is mostly forward then continue to go forward
-      nav_command_msg.angle = heading_angle;
-      nav_command_msg.x = direction(0);
-      nav_command_msg.y = direction(1);
-      nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
-    } else {
-      // The robot is not forward enough, only rotate 
-      nav_command_msg.angle = heading_angle;
-      nav_command_msg.x = 0.0f;
-      nav_command_msg.y = 0.0f;
-      nav_command_msg.max_speed = 0.2;
-    }
+  float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  if (!is_backward && !down_stairs_ahead) {
+    heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  } else if (!is_on_slope && is_backward && is_rotation_safe && !down_stairs_ahead) {
+    // Rotate to be forward
+    std::cout << "Rotate to be forward\n";
+    heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  } else if (is_backward && !up_stairs_ahead) {
+    std::cout << "Continue backward\n";
+    heading_angle = GetAngle(Eigen::Vector2f(-1, 0), direction);
+  } else if (!is_on_slope && !is_backward && is_rotation_safe && !up_stairs_ahead && down_stairs_ahead) {
+    std::cout << "Rotate to be backward\n";
+    heading_angle = GetAngle(Eigen::Vector2f(-1, 0), direction);
   } else {
+
     nav_command_msg.angle = 0.0f;
     nav_command_msg.x = 0.0f;
     nav_command_msg.y = 0.0f;
     nav_command_msg.max_speed = 0.2;
+
+    return nav_command_msg;
+
   }
+
+  if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
+    // If the robot is mostly forward then continue to go forward
+    nav_command_msg.angle = heading_angle;
+    nav_command_msg.x = direction(0);
+    nav_command_msg.y = direction(1);
+    nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
+  } else {
+    // The robot is not forward enough, only rotate 
+    nav_command_msg.angle = heading_angle;
+    nav_command_msg.x = 0.0f;
+    nav_command_msg.y = 0.0f;
+    nav_command_msg.max_speed = 0.2;
+  }
+
+  return nav_command_msg;
+
+  // if ((!is_backward && !down_stairs_ahead) || (!is_on_slope && is_backward && is_rotation_safe && !down_stairs_ahead)) {
+  //   // There is no down stairs ahead and the robot is going forward -> it can continue forward
+  //   // Or the robot is ok and can turn back forward
+  //   float heading_angle = std::atan2(direction(1), direction(0));
+
+  //   RCLCPP_INFO(this->get_logger(), "Continue Forward");
+
+  //   if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
+  //     // If the robot is mostly forward then continue to go forward
+  //     nav_command_msg.angle = heading_angle;
+  //     nav_command_msg.x = direction(0);
+  //     nav_command_msg.y = direction(1);
+  //     nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
+  //   } else {
+  //     // The robot is not forward enough, only rotate 
+  //     nav_command_msg.angle = heading_angle;
+  //     nav_command_msg.x = 0.0f;
+  //     nav_command_msg.y = 0.0f;
+  //     nav_command_msg.max_speed = 0.2;
+  //   }
+  // } else if ((is_backward && !up_stairs_ahead) || (!is_on_slope && !is_backward && is_rotation_safe && !up_stairs_ahead && down_stairs_ahead)) {
+  //   // If the robot is backward and there is no upstairs ahead then continue backward
+  //   // if the robot is not on a slope, is not backward, can rotate, with down stairs but without down stairs then rotates
+  //   float heading_angle = std::atan2(-direction(1), -direction(0)); // TODO: Check if that works
+
+  //   RCLCPP_INFO(this->get_logger(), "Continue Backward");
+
+  //   if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
+  //     // If the robot is mostly forward then continue to go forward
+  //     nav_command_msg.angle = heading_angle;
+  //     nav_command_msg.x = direction(0);
+  //     nav_command_msg.y = direction(1);
+  //     nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
+  //   } else {
+  //     // The robot is not forward enough, only rotate 
+  //     nav_command_msg.angle = heading_angle;
+  //     nav_command_msg.x = 0.0f;
+  //     nav_command_msg.y = 0.0f;
+  //     nav_command_msg.max_speed = 0.2;
+  //   }
+  // } else {
+  //   nav_command_msg.angle = 0.0f;
+  //   nav_command_msg.x = 0.0f;
+  //   nav_command_msg.y = 0.0f;
+  //   nav_command_msg.max_speed = 0.2;
+  // }
 
   return nav_command_msg;
 }

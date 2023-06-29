@@ -33,6 +33,7 @@ class LocalPlanner : public rclcpp::Node {
   void NavCallBack(const aut_msgs::msg::Nav::SharedPtr nav_msg);
   nav_msgs::msg::OccupancyGrid LocalGridToOccupancyGrid(std::vector<float> local_grid, geometry_msgs::msg::Transform base_link_to_local_grid);
   aut_msgs::msg::NavCommand CreateCommand(Eigen::Vector2f direction, bool is_backward, bool is_rotation_safe, bool is_on_slope, bool up_stairs_ahead, bool down_stairs_ahead);
+  float GetAngle(Eigen::Vector2f body, Eigen::Vector2f target);
 
   // bool LocalPlanner::IsFreeLocalGrid(Eigen::Vector3f local_grid_to_position);
 
