@@ -36,7 +36,7 @@ struct by_value {
 FeatureExtraction::FeatureExtraction(const rclcpp::NodeOptions& options)
     : Node("feature_extraction", options) {
       
-  this->declare_parameter("max_cache_size", 5);
+  this->declare_parameter("max_cache_size", 2);
   max_cache_size_ = this->get_parameter("max_cache_size").get_parameter_value().get<int>();    
 
   RCLCPP_INFO(this->get_logger(), "Received cloud");

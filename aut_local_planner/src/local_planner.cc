@@ -85,23 +85,35 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
   }
   state_mtx_.unlock();
 
-  if (!tf_buffer_->canTransform("map", "base_link", tf2::TimePointZero)) {
+  deque_local_grid_msgs_.push_back(*local_grid_msg);
+
+  std::string* err1 = new std::string();
+  if (!tf_buffer_->canTransform("map", "base_link", deque_local_grid_msgs_.front().header.stamp, rclcpp::Duration::from_seconds(0.05), err1)) {
+    RCLCPP_INFO(this->get_logger(), "No data for map_to_base_link");
+    RCLCPP_INFO(this->get_logger(), (*err1).c_str());
     return;
+
+    if ((int) deque_local_grid_msgs_.size() > 2) {
+      deque_local_grid_msgs_.pop_front();
+    }
   }
 
-  geometry_msgs::msg::Transform trans = tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero).transform;
+  aut_msgs::msg::LocalGrid current_local_grid_msg = deque_local_grid_msgs_.front();
+  deque_local_grid_msgs_.pop_front();
+
+  geometry_msgs::msg::Transform trans = tf_buffer_->lookupTransform("map", "base_link", current_local_grid_msg.header.stamp).transform;
   Eigen::Matrix4f map_to_base_link = aut_utils::TransformToMatrix(trans);
 
-  geometry_msgs::msg::Transform trans_grav = tf_buffer_->lookupTransform("base_link", "gravity", tf2::TimePointZero).transform;
+  geometry_msgs::msg::Transform trans_grav = tf_buffer_->lookupTransform("base_link", "gravity", current_local_grid_msg.header.stamp).transform;
   Eigen::Matrix4f base_link_to_gravity = aut_utils::TransformToMatrix(trans_grav);
 
-  Eigen::Matrix4f base_link_to_local_grid = aut_utils::TransformToMatrix(local_grid_msg->pose);
+  Eigen::Matrix4f base_link_to_local_grid = aut_utils::TransformToMatrix(current_local_grid_msg.pose);
 
   Eigen::Matrix4f local_grid_to_gravity = aut_utils::InverseTransformation(base_link_to_local_grid) * base_link_to_gravity;
 
   std::cout << local_grid_to_gravity << std::endl;
 
-  local_grid_.AddLocalGrid(local_grid_msg->local_grid, map_to_base_link, base_link_to_local_grid);
+  local_grid_.AddLocalGrid(current_local_grid_msg.local_grid, map_to_base_link, base_link_to_local_grid);
 
   RCLCPP_INFO(this->get_logger(), "Find closest node");
   float closest_dist = std::numeric_limits<float>::max();

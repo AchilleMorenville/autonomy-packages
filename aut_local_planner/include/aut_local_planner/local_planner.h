@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <vector>
+#include <deque>
 
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
@@ -46,6 +47,8 @@ class LocalPlanner : public rclcpp::Node {
 
   int preceeding_stop_;
   int count_preceeding_stop_;
+
+  std::deque<aut_msgs::msg::LocalGrid> deque_local_grid_msgs_;
 
   std::vector<Eigen::Vector3f> path_;
   // Grid grid_;
