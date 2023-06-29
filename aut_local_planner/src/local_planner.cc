@@ -322,32 +322,33 @@ aut_msgs::msg::NavCommand LocalPlanner::CreateCommand(Eigen::Vector2f direction,
 
   aut_msgs::msg::NavCommand nav_command_msg;
 
+  // float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  // if (!is_backward && !down_stairs_ahead) {
+  //   RCLCPP_INFO(this->get_logger(), "Continue Forward");
+  //   heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  // } else if (!is_on_slope && is_backward && is_rotation_safe && !down_stairs_ahead) {
+  //   // Rotate to be forward
+  //   RCLCPP_INFO(this->get_logger(), "Rotate to be forward");
+  //   std::cout << "Rotate to be forward\n";
+  //   heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  // } else if (is_backward && !up_stairs_ahead) {
+  //   std::cout << "Continue backward\n";
+  //   heading_angle = GetAngle(Eigen::Vector2f(-1, 0), direction);
+  // } else if (!is_on_slope && !is_backward && is_rotation_safe && !up_stairs_ahead && down_stairs_ahead) {
+  //   std::cout << "Rotate to be backward\n";
+  //   heading_angle = GetAngle(Eigen::Vector2f(-1, 0), direction);
+  // } else {
+
+  //   nav_command_msg.angle = 0.0f;
+  //   nav_command_msg.x = 0.0f;
+  //   nav_command_msg.y = 0.0f;
+  //   nav_command_msg.max_speed = 0.2;
+
+  //   return nav_command_msg;
+
+  // }
+
   float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
-  if (!is_backward && !down_stairs_ahead) {
-    RCLCPP_INFO(this->get_logger(), "Continue Forward");
-    heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
-  } else if (!is_on_slope && is_backward && is_rotation_safe && !down_stairs_ahead) {
-    // Rotate to be forward
-    RCLCPP_INFO(this->get_logger(), "Rotate to be forward");
-    std::cout << "Rotate to be forward\n";
-    heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
-  } else if (is_backward && !up_stairs_ahead) {
-    std::cout << "Continue backward\n";
-    heading_angle = GetAngle(Eigen::Vector2f(-1, 0), direction);
-  } else if (!is_on_slope && !is_backward && is_rotation_safe && !up_stairs_ahead && down_stairs_ahead) {
-    std::cout << "Rotate to be backward\n";
-    heading_angle = GetAngle(Eigen::Vector2f(-1, 0), direction);
-  } else {
-
-    nav_command_msg.angle = 0.0f;
-    nav_command_msg.x = 0.0f;
-    nav_command_msg.y = 0.0f;
-    nav_command_msg.max_speed = 0.2;
-
-    return nav_command_msg;
-
-  }
-
   if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
     // If the robot is mostly forward then continue to go forward
     nav_command_msg.angle = heading_angle;
