@@ -196,7 +196,8 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
 
   nav_command_publisher_->publish(CreateCommand(direction, is_backward, is_rotation_safe, is_on_slope, up_stairs_ahead, down_stairs_ahead));
 
-  nav_msgs::msg::OccupancyGrid occupancy_grid_msg = LocalGridToOccupancyGrid(local_grid_msg->local_grid, local_grid_msg->pose);
+  // nav_msgs::msg::OccupancyGrid occupancy_grid_msg = LocalGridToOccupancyGrid(local_grid_msg->local_grid, local_grid_msg->pose);
+  nav_msgs::msg::OccupancyGrid occupancy_grid_msg = local_grid_.LocalGridToOccupancyGrid();
   occupancy_grid_publisher_->publish(occupancy_grid_msg);
 
   // // Search for new target

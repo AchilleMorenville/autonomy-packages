@@ -235,9 +235,12 @@ void GlobalPlanner::execute(
     if (nav_graph_has_changed_) {
 
       if (inaccessible_node_in_path_ < 0) {
+        aut_msgs::msg::Nav empty_nav_msg;
+        nav_publisher_->publish(empty_nav_msg);
+        
         result->success = false;
         goal_handle->abort(result);
-        RCLCPP_INFO(this->get_logger(), "Goal aborted, no more path to goal");
+        RCLCPP_INFO(this->get_logger(), "Goal aborted, no path feasible");
         return;
       }
 
@@ -251,6 +254,9 @@ void GlobalPlanner::execute(
       found_path = nav_graph_.AStar(start_closest_node_idx, goal_closest_node_idx, path_idx);
 
       if (!found_path) {
+        aut_msgs::msg::Nav empty_nav_msg;
+        nav_publisher_->publish(empty_nav_msg);
+
         result->success = false;
         goal_handle->abort(result);
         RCLCPP_INFO(this->get_logger(), "Goal aborted, no more path to goal");

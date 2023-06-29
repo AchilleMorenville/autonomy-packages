@@ -45,6 +45,7 @@ class LocalGrid {
   bool IsInGrid(std::pair<int, int> p);
   bool IsFree(std::pair<int, int> p);
   float GetEuclideanDist(std::pair<int, int> p1, std::pair<int, int> p2);
+  std::pair<int, int> GetTarget(std::vector<std::pair<int, int>> &path);
 
   bool FindPath(std::pair<int, int> start, std::pair<int, int> goal, std::vector<float>& h_local_grid, std::vector<std::pair<int, int>> &path);
   float GetWeight(std::pair<int, int> p);
@@ -59,6 +60,8 @@ class LocalGrid {
   std::vector<float> local_grid_;
   Eigen::Matrix4f map_to_base_link_;
   Eigen::Matrix4f base_link_to_local_grid_;
+
+  std::vector<std::pair<int, int>> current_path_;
 
 };
 

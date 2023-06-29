@@ -83,38 +83,67 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
     std::vector<std::pair<int, int>> path;
     bool found_path = FindPath(start_indexes, target_indexes, h_local_grid, path);
 
+    current_path_ = path;
+
     if (!found_path) {
       continue;
     }
 
-    Eigen::Matrix4f local_grid_to_base_link = aut_utils::InverseTransformation(base_link_to_local_grid_);
-    Eigen::Matrix4f base_link_to_x_axis = Eigen::Matrix4f::Identity();
-    base_link_to_x_axis(0, 3) = 1.0f;
-    Eigen::Matrix4f local_grid_to_x_axis = local_grid_to_base_link * base_link_to_x_axis;
+    std::pair<int, int> point_to_follow = GetTarget(path);
 
-    float current_dx = local_grid_to_x_axis(0, 3) - local_grid_to_base_link(0, 3);
-    float current_dy = local_grid_to_x_axis(1, 3) - local_grid_to_base_link(1, 3);
+    Eigen::Matrix4f x_axis = Eigen::Matrix4f::Identity();
+    x_axis(0, 3) = 1.0f;
+    std::pair<int, int> indexes_x_axis((int) (x_axis(0, 3) / 0.03f), (int) (x_axis(1, 3) / 0.03f));
 
-    Eigen::Vector2f projected_x(current_dx, current_dy);
-    Eigen::Vector2f projected_y(-current_dy, current_dx);
+    Eigen::Vector2f vector_base_link_x;
+    vector_base_link_x(0) = (indexes_x_axis.first - start_indexes.first);
+    vector_base_link_x(1) = (indexes_x_axis.second - start_indexes.second);
+    vector_base_link_x /= vector_base_link_x.norm();
+
+    Eigen::Matrix4f y_axis = Eigen::Matrix4f::Identity();
+    y_axis(1, 3) = 1.0f;
+    std::pair<int, int> indexes_y_axis((int) (y_axis(0, 3) / 0.03f), (int) (y_axis(1, 3) / 0.03f));
+
+    Eigen::Vector2f vector_base_link_y;
+    vector_base_link_y(0) = (indexes_y_axis.first - start_indexes.first);
+    vector_base_link_y(1) = (indexes_y_axis.second - start_indexes.second);
+    vector_base_link_y /= vector_base_link_y.norm();
+
+    Eigen::Vector2f vector_target;
+    vector_target(0) = (point_to_follow.first - start_indexes.first);
+    vector_target(1) = (point_to_follow.second - start_indexes.second);
+
+    direction(0) = vector_target.dot(vector_base_link_x) * 0.03f;
+    direction(1) = vector_target.dot(vector_base_link_y) * 0.03f;
     
-    projected_x.normalize();
-    projected_y.normalize();
+    // Eigen::Matrix4f local_grid_to_base_link = aut_utils::InverseTransformation(base_link_to_local_grid_);
+    // Eigen::Matrix4f base_link_to_x_axis = Eigen::Matrix4f::Identity();
+    // base_link_to_x_axis(0, 3) = 1.0f;
+    // Eigen::Matrix4f local_grid_to_x_axis = local_grid_to_base_link * base_link_to_x_axis;
 
-    std::pair<int, int> point = path[std::min(5,(int) path.size())];
-    Eigen::Matrix4f local_grid_to_point = Eigen::Matrix4f::Identity();
-    local_grid_to_point(0, 3) = (point.first + 0.5f) * 0.03f;
-    local_grid_to_point(1, 3) = (point.second + 0.5f) * 0.03f;
+    // float current_dx = local_grid_to_x_axis(0, 3) - local_grid_to_base_link(0, 3);
+    // float current_dy = local_grid_to_x_axis(1, 3) - local_grid_to_base_link(1, 3);
 
-    Eigen::Vector2f vector_point(local_grid_to_point(0, 3) - local_grid_to_base_link(0, 3), local_grid_to_point(1, 3) - local_grid_to_base_link(1, 3));
-    float direction_dist = vector_point.norm();
-    // vector_point.normalize();
+    // Eigen::Vector2f projected_x(current_dx, current_dy);
+    // Eigen::Vector2f projected_y(-current_dy, current_dx);
+    
+    // projected_x.normalize();
+    // projected_y.normalize();
 
-    float dx = vector_point.dot(projected_x);
-    float dy = vector_point.dot(projected_y);
+    // std::pair<int, int> point = path[std::min(5,(int) path.size())];
+    // Eigen::Matrix4f local_grid_to_point = Eigen::Matrix4f::Identity();
+    // local_grid_to_point(0, 3) = (point.first + 0.5f) * 0.03f;
+    // local_grid_to_point(1, 3) = (point.second + 0.5f) * 0.03f;
 
-    direction(0) = dx;
-    direction(1) = dy;
+    // Eigen::Vector2f vector_point(local_grid_to_point(0, 3) - local_grid_to_base_link(0, 3), local_grid_to_point(1, 3) - local_grid_to_base_link(1, 3));
+    // float direction_dist = vector_point.norm();
+    // // vector_point.normalize();
+
+    // float dx = vector_point.dot(projected_x);
+    // float dy = vector_point.dot(projected_y);
+
+    // direction(0) = dx;
+    // direction(1) = dy;
 
     if (found_path) {
       std::cout << "Found path " << i << " on " << targets_position.size() << "\n";
@@ -124,6 +153,25 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
   }
 
   return -1;
+}
+
+std::pair<int, int> LocalGrid::GetTarget(std::vector<std::pair<int, int>> &path) {
+  std::pair<int, int> start = path[0];
+  int best_id = -1;
+  for (int best = path.size() - 1; best >= 0; --best) {
+    float max_dist_from_line = -1;
+    for (int i = 0; i <= best; ++i) {
+      float dist = std::abs((path[best].first - start.first) * (start.second - path[i].second) - (start.first - path[i].first) * (path[best].second - start.second)) / std::sqrt((start.first - path[best].first) * (start.first - path[best].first) + (start.second - path[best].second) * (start.second - path[best].second));
+      if (dist > max_dist_from_line) {
+        max_dist_from_line = dist;
+      }
+    }
+    if (max_dist_from_line < 5.0) {
+      best_id = best;
+      break;
+    }
+  }
+  return path[best_id];
 }
 
 void LocalGrid::ComputeHeuristic(std::pair<int, int> target_indexes, std::vector<float>& h_local_grid) {
@@ -303,30 +351,20 @@ float LocalGrid::GetWeight(std::pair<int, int> p) {
 
 nav_msgs::msg::OccupancyGrid LocalGrid::LocalGridToOccupancyGrid() {
 
-  std::pair<int, int> target_indexes(64, 64);
-
-  // Compute dijkstra heuristic for the A* search
-  std::vector<float> h_local_grid;
-  ComputeHeuristic(target_indexes, h_local_grid);
-
   nav_msgs::msg::OccupancyGrid occupancy_grid;
-
-  float max_h = -std::numeric_limits<float>::max();
-  for (int i = 0; i < (int) h_local_grid.size(); ++i) {
-    if (h_local_grid[i] > max_h) {
-      max_h = h_local_grid[i];
-    }
-  }
 
   // occupancy_grid.data.reserve(128 * 128);
 
   for (int i = 0; i < 128 * 128; ++i) {
-    if (h_local_grid[i] < 0.25f) {
+    if (local_grid_[i] < 0.25f) {
       occupancy_grid.data.push_back(100);
     } else {
-      int value = (int) h_local_grid[i] / max_h * 100;
-      occupancy_grid.data.push_back(value);
+      occupancy_grid.data.push_back(0);
     }
+  }
+
+  for (int i = 0; i < (int) current_path_.size(); ++i) {
+    occupancy_grid.data[current_path_[i].first + 128 * current_path_[i].second] = 100;
   }
 
   // float max_h = -std::numeric_limits<float>::max();
