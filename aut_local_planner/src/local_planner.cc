@@ -11,6 +11,8 @@
 
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <geometry_msgs/msg/transform.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <geometry_msgs/msg/point.hpp>
 
 #include <Eigen/Core>
 
@@ -65,6 +67,7 @@ LocalPlanner::LocalPlanner(const rclcpp::NodeOptions& options)
   nav_command_publisher_ = this->create_publisher<aut_msgs::msg::NavCommand>("aut_local_planner/nav_command", 10);
   occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("aut_local_planner/occupancy_grid", 10);
   nav_modif_publisher_ = this->create_publisher<aut_msgs::msg::NavModif>("aut_local_planner/nav_modif", 10);
+  marker_command_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("aut_local_planner/marker_command", 10);
 }
 
 void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr local_grid_msg) {
@@ -147,7 +150,7 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
   Eigen::Vector3f z_gravity(0.0, 0.0, 1.0);
 
   Eigen::Matrix4f base_link_to_z = Eigen::Matrix4f::Identity();
-  base_link_to_z(2, 3) = 1;
+  base_link_to_z(2, 3) = 1.0f;
 
   Eigen::Vector3f z_base_link = (aut_utils::InverseTransformation(base_link_to_gravity) * base_link_to_z).block<3, 1>(0, 3);
 
@@ -158,7 +161,7 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
   RCLCPP_INFO(this->get_logger(), "Create target vectors");
   std::vector<int> targets_idx;
   std::vector<Eigen::Vector3f> targets_position;
-  for (int i = std::min(closest_idx - 3, 0); i < ((int) path_.size()) && i < closest_idx + 3; ++i) {
+  for (int i = std::min(closest_idx - 3, 0); i < ((int) path_.size()) && i < closest_idx + 5; ++i) {
     if (local_grid_.IsInGrid(path_[i])) {
       targets_position.push_back(path_[i]);
       targets_idx.push_back(i);
@@ -198,10 +201,41 @@ void LocalPlanner::LocalGridCallBack(const aut_msgs::msg::LocalGrid::SharedPtr l
     return;
   }
 
-  // float heading_angle = std::atan2(direction(1), direction(0));
-  float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction) * 180.0f / M_PI;  // Relative to the front of the robot
+  float heading_angle = std::atan2(direction(1), direction(0)) * 180.0f / M_PI;
+  // float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction) * 180.0f / M_PI;  // Relative to the front of the robot
   
   RCLCPP_INFO(this->get_logger(), "Heading angle: %f", heading_angle);
+
+  visualization_msgs::msg::Marker marker;
+  marker.header.frame_id = "base_link";
+  marker.ns = std::string("arrows");
+  marker.id = 0;
+  marker.type = 0;
+  marker.action = 0;
+
+  geometry_msgs::msg::Point point_1;
+  point_1.x = 0;
+  point_1.y = 0;
+  point_1.z = 0;
+
+  geometry_msgs::msg::Point point_2;
+  point_2.x = direction(0);
+  point_2.y = direction(1);
+  point_2.z = 0;
+  marker.points.push_back(point_1);
+  marker.points.push_back(point_2);
+
+  marker.scale.x = 0.02;
+  marker.scale.y = 0.05;
+  marker.scale.z = 0;
+
+  marker.lifetime.sec = 1;
+  marker.color.a = 1.0;
+  marker.color.r = 0.0;
+  marker.color.g = 0.0;
+  marker.color.b = 1.0;
+
+  marker_command_publisher_->publish(marker);
 
   bool is_backward = std::abs(heading_angle) > 90.0f;
 
@@ -348,16 +382,17 @@ aut_msgs::msg::NavCommand LocalPlanner::CreateCommand(Eigen::Vector2f direction,
 
   // }
 
-  float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  // float heading_angle = GetAngle(Eigen::Vector2f(1, 0), direction);
+  float heading_angle = std::atan2(direction(1), direction(0));
   if (std::abs(heading_angle) * 180.0f / M_PI <= 20) {
     // If the robot is mostly forward then continue to go forward
-    nav_command_msg.angle = -heading_angle;
+    nav_command_msg.angle = heading_angle;
     nav_command_msg.x = direction(0);
     nav_command_msg.y = direction(1);
     nav_command_msg.max_speed = std::abs(heading_angle) * 180.0f / M_PI <= 10 ? 0.4 : 0.2;
   } else {
     // The robot is not forward enough, only rotate 
-    nav_command_msg.angle = -heading_angle;
+    nav_command_msg.angle = heading_angle;
     nav_command_msg.x = 0.0f;
     nav_command_msg.y = 0.0f;
     nav_command_msg.max_speed = 0.2;

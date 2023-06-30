@@ -53,7 +53,7 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
   Eigen::Matrix4f local_grid_to_base_link = aut_utils::InverseTransformation(base_link_to_local_grid_);
   std::pair<int, int> start_indexes((int) (local_grid_to_base_link(0, 3) / 0.03f), (int) (local_grid_to_base_link(1, 3) / 0.03f));
 
-  for (int i = targets_position.size() - 1; i >=0 ; --i) {
+  for (int i = (int) targets_position.size() - 1; i >=0 ; --i) {
 
     std::cout << "Try target nbr: " << i << "\n";
 
@@ -95,32 +95,47 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
 
     Eigen::Matrix4f x_axis = Eigen::Matrix4f::Identity();
     x_axis(0, 3) = 1.0f;
-
     Eigen::Matrix4f local_grid_to_x_axis = local_grid_to_base_link * x_axis;
-    std::pair<int, int> indexes_x_axis((int) (local_grid_to_x_axis(0, 3) / 0.03f), (int) (local_grid_to_x_axis(1, 3) / 0.03f));
+    
+    Eigen::Vector2f local_grid_to_x_axis_2D_vector(local_grid_to_x_axis(0, 3), local_grid_to_x_axis(1, 3));
+    Eigen::Vector2f local_grid_to_point_2D_vector((point_to_follow.first + 0.5f) * 0.03f, (point_to_follow.second + 0.5f) * 0.03f);
+    Eigen::Vector2f local_grid_to_base_link_2D_vector(local_grid_to_base_link(0, 3), local_grid_to_base_link(1, 3));
 
-    Eigen::Vector2f vector_base_link_x;
-    vector_base_link_x(0) = (indexes_x_axis.first - start_indexes.first);
-    vector_base_link_x(1) = (indexes_x_axis.second - start_indexes.second);
-    vector_base_link_x /= vector_base_link_x.norm();
+    Eigen::Vector2f base_link_to_x_axis_2D_vector = local_grid_to_x_axis_2D_vector - local_grid_to_base_link_2D_vector;
+    Eigen::Vector2f base_link_to_point_2D_vector = local_grid_to_point_2D_vector - local_grid_to_base_link_2D_vector;
 
-    Eigen::Matrix4f y_axis = Eigen::Matrix4f::Identity();
-    y_axis(1, 3) = 1.0f;
+    Eigen::Vector2f base_link_to_y_axis_2D_vector(-base_link_to_x_axis_2D_vector(1), base_link_to_x_axis_2D_vector(0));
 
-    Eigen::Matrix4f local_grid_to_y_axis = local_grid_to_base_link * y_axis;
-    std::pair<int, int> indexes_y_axis((int) (local_grid_to_y_axis(0, 3) / 0.03f), (int) (local_grid_to_y_axis(1, 3) / 0.03f));
+    base_link_to_x_axis_2D_vector /= base_link_to_x_axis_2D_vector.norm();
+    base_link_to_y_axis_2D_vector /= base_link_to_y_axis_2D_vector.norm();
 
-    Eigen::Vector2f vector_base_link_y;
-    vector_base_link_y(0) = (indexes_y_axis.first - start_indexes.first);
-    vector_base_link_y(1) = (indexes_y_axis.second - start_indexes.second);
-    vector_base_link_y /= vector_base_link_y.norm();
+    direction(0) = base_link_to_x_axis_2D_vector.dot(base_link_to_point_2D_vector);
+    direction(1) = base_link_to_y_axis_2D_vector.dot(base_link_to_point_2D_vector);
 
-    Eigen::Vector2f vector_target;
-    vector_target(0) = (point_to_follow.first - start_indexes.first);
-    vector_target(1) = (point_to_follow.second - start_indexes.second);
+    // std::pair<int, int> indexes_x_axis((int) (local_grid_to_x_axis(0, 3) / 0.03f), (int) (local_grid_to_x_axis(1, 3) / 0.03f));
 
-    direction(0) = vector_target.dot(vector_base_link_x) * 0.03f;
-    direction(1) = vector_target.dot(vector_base_link_y) * 0.03f;
+    // Eigen::Vector2f vector_base_link_x;
+    // vector_base_link_x(0) = (indexes_x_axis.first - start_indexes.first);
+    // vector_base_link_x(1) = (indexes_x_axis.second - start_indexes.second);
+    // vector_base_link_x /= vector_base_link_x.norm();
+
+    // Eigen::Matrix4f y_axis = Eigen::Matrix4f::Identity();
+    // y_axis(1, 3) = 1.0f;
+
+    // Eigen::Matrix4f local_grid_to_y_axis = local_grid_to_base_link * y_axis;
+    // std::pair<int, int> indexes_y_axis((int) (local_grid_to_y_axis(0, 3) / 0.03f), (int) (local_grid_to_y_axis(1, 3) / 0.03f));
+
+    // Eigen::Vector2f vector_base_link_y;
+    // vector_base_link_y(0) = (indexes_y_axis.first - start_indexes.first);
+    // vector_base_link_y(1) = (indexes_y_axis.second - start_indexes.second);
+    // vector_base_link_y /= vector_base_link_y.norm();
+
+    // Eigen::Vector2f vector_target;
+    // vector_target(0) = (point_to_follow.first - start_indexes.first);
+    // vector_target(1) = (point_to_follow.second - start_indexes.second);
+
+    // direction(0) = vector_target.dot(vector_base_link_x) * 0.03f;
+    // direction(1) = vector_target.dot(vector_base_link_y) * 0.03f;
 
     // Eigen::Matrix4f local_grid_to_base_link = aut_utils::InverseTransformation(base_link_to_local_grid_);
     // Eigen::Matrix4f base_link_to_x_axis = Eigen::Matrix4f::Identity();
@@ -163,8 +178,8 @@ int LocalGrid::GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen
 
 std::pair<int, int> LocalGrid::GetTarget(std::vector<std::pair<int, int>> &path) {
   std::pair<int, int> start = path[0];
-  int best_id = -1;
-  for (int best = path.size() - 1; best >= 0; --best) {
+  int best_id = std::min((int) path.size() - 1, 5);
+  for (int best = std::min((int) path.size() - 1, 20); best >= 5; --best) {
     float max_dist_from_line = -1;
     for (int i = 0; i <= best; ++i) {
       float dist = std::abs((path[best].first - start.first) * (start.second - path[i].second) - (start.first - path[i].first) * (path[best].second - start.second)) / std::sqrt((start.first - path[best].first) * (start.first - path[best].first) + (start.second - path[best].second) * (start.second - path[best].second));

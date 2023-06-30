@@ -10,6 +10,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <geometry_msgs/msg/transform.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 
 #include <Eigen/Core>
@@ -58,6 +59,7 @@ class LocalPlanner : public rclcpp::Node {
   rclcpp::Publisher<aut_msgs::msg::NavCommand>::SharedPtr nav_command_publisher_;
   rclcpp::Publisher<aut_msgs::msg::NavModif>::SharedPtr nav_modif_publisher_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr occupancy_grid_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_command_publisher_;
 
   // Subscription
   rclcpp::Subscription<aut_msgs::msg::LocalGrid>::SharedPtr local_grid_subscription_;

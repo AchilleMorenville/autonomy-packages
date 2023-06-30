@@ -23,16 +23,16 @@ def generate_launch_description():
             get_package_share_directory('aut_global_planner'), 'launch'),
             '/global_planner_launch.py'])
         )
-    # local_planner_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource([os.path.join(
-    #         get_package_share_directory('aut_local_planner'), 'launch'),
-    #         '/local_planner_launch.py'])
-    #     )
+    local_planner_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([os.path.join(
+            get_package_share_directory('aut_local_planner'), 'launch'),
+            '/local_planner_launch.py'])
+        )
 
 
     return LaunchDescription([
         localization_launch,
         lidar_odometry_launch,
         global_planner_launch,
-        # local_planner_launch
+        local_planner_launch
     ])

@@ -58,7 +58,7 @@ class SpotCommand(Node):
 	def listener_callback(self, msg):
 
 		params = spot_command_pb2.MobilityParams(
-			vel_limit=geometry_pb2.SE2VelocityLimit(max_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=msg.max_speed, y=msg.max_speed), angular=0.2), min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-msg.max_speed, y=-msg.max_speed), angular=-0.2)),
+			vel_limit=geometry_pb2.SE2VelocityLimit(max_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=msg.max_speed, y=msg.max_speed), angular=0.4), min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-msg.max_speed, y=-msg.max_speed), angular=-0.4)),
 			locomotion_hint=spot_command_pb2.HINT_AUTO
 		)
 
