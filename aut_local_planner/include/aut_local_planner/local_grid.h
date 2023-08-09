@@ -1,129 +1,86 @@
 #ifndef AUT_LOCAL_PLANNER_LOCAL_GRID_H_
 #define AUT_LOCAL_PLANNER_LOCAL_GRID_H_
 
-#include <cmath>
-#include <memory>
 #include <vector>
 #include <utility>
-#include <tuple>
-#include <functional>
-
-#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <queue>
 
 #include <Eigen/Core>
 
-namespace aut_local_planner {
+#include "aut_local_planner/utils.h"
 
-struct hash_pair {
-  template <class T1, class T2>
-  std::size_t operator()(const std::pair<T1, T2>& p) const
-  {
-    std::size_t hash1 = std::hash<T1>{}(p.first);
-    std::size_t hash2 = std::hash<T2>{}(p.second);
-    std::size_t r = 0;
-    r ^= hash1 + 0x9e3779b9 + (r << 6) + (r >> 2);
-    r ^= hash2 + 0x9e3779b9 + (r << 6) + (r >> 2);
-    return r;
-  }
-};
+namespace aut_local_planner {
 
 class LocalGrid {
 
  public:
-  explicit LocalGrid(float min_dist, float max_dist, float min_dist_to_target, float obstacle_coeff);
 
-  void AddLocalGrid(std::vector<float> local_grid, Eigen::Matrix4f map_to_base_link, Eigen::Matrix4f base_link_to_local_grid);
-  int GetDirection(std::vector<Eigen::Vector3f> targets_position, Eigen::Vector2f& direction);
-  bool IsInGrid(Eigen::Vector3f position);
-  bool IsCurrentPositionRotationSafe();
-  nav_msgs::msg::OccupancyGrid LocalGridToOccupancyGrid();
+  struct Pose {
+    float x;
+    float y;
+    float theta;
+
+    Pose();
+    Pose(float x, float y, float theta);
+    Pose(const Pose& p);
+    Pose& operator=(Pose p);
+    ~Pose();
+  };
+
+  explicit LocalGrid();
+  void SetLocalGrid(const std::vector<float>& local_grid, const Eigen::Matrix4f local_grid_to_base_link, const Eigen::Matrix4f map_to_base_link);
+  Motion GetMotion(const Eigen::Matrix4f map_to_goal);
 
  private:
 
-  void ComputeHeuristic(std::pair<int, int> target_indexes, std::vector<float>& h_local_grid);
-  std::vector<std::pair<int, int>> GetNeighbors(std::pair<int, int> p);
-  bool IsInGrid(std::pair<int, int> p);
-  bool IsFree(std::pair<int, int> p);
-  float GetEuclideanDist(std::pair<int, int> p1, std::pair<int, int> p2);
-  std::pair<int, int> GetTarget(std::vector<std::pair<int, int>> &path);
+  struct State {
+    Pose pose;
+    int parent_idx_3D;
+    Motion motion_from_parent;
+    float g;
+    float h;
 
-  bool FindPath(std::pair<int, int> start, std::pair<int, int> goal, std::vector<float>& h_local_grid, std::vector<std::pair<int, int>> &path);
-  float GetWeight(std::pair<int, int> p);
+    State();
+    State(Pose pose, int parent_idx_3D, Motion motion_from_parent, float g, float h);
+    State(const State& s);
+    State& operator=(State s);
+    ~State();
+  };
 
-  // Parameters
-  float min_dist_;
-  float max_dist_;
-  float min_dist_to_target_;
-  float obstacle_coeff_;
+  struct StateComparator {
+    bool operator()(const State& a, const State& b) const {
+      return (a.g + a.h) > (b.g + b.h);
+    }
+  };
 
-  // State
+  typedef std::priority_queue<State, 
+                              std::vector<State>, 
+                              StateComparator> HybridPriorityQueue;
+
+  int Get3DIndex(Pose pose);
+  Pose GetPoseFromMap(Eigen::Matrix4f map_to_p);
+
+  void PrecomputeHeuristics(const Pose goal);
+  void PrecomputeObstacleHeuristic(const Pose goal);
+  int GetIndex2D(const Pose pose);
+  std::vector<std::pair<int, float>> GetNeighbor2D(const std::pair<int, float> current);
+  float GetHeuristic(const Pose pose);
+
+  // Parmeters
+  int x_size_;
+  int y_size_;
+  int theta_size_;
+  float cell_size_;
+  float min_obstacle_dist_;
+
   std::vector<float> local_grid_;
+  std::vector<float> obstacle_heuristic_;
+
+
+  Eigen::Matrix4f local_grid_to_base_link_;
   Eigen::Matrix4f map_to_base_link_;
-  Eigen::Matrix4f base_link_to_local_grid_;
-
-  std::vector<std::pair<int, int>> current_path_;
-  std::pair<int, int> current_point_to_follow_;
-
 };
 
 }  // namespace aut_local_planner
 
 #endif  // AUT_LOCAL_PLANNER_LOCAL_GRID_H_
-
-// #ifndef AUT_LOCAL_PLANNER_LOCAL_GRID_H_
-// #define AUT_LOCAL_PLANNER_LOCAL_GRID_H_
-
-// #include <vector>
-// #include <utility>
-
-// #include <Eigen/Core>
-
-// namespace aut_local_planner {
-
-// struct hash_pair {
-//   template <class T1, class T2>
-//   std::size_t operator()(const std::pair<T1, T2>& p) const
-//   {
-//     std::size_t hash1 = std::hash<T1>{}(p.first);
-//     std::size_t hash2 = std::hash<T2>{}(p.second);
-//     std::size_t r = 0;
-//     r ^= hash1 + 0x9e3779b9 + (r << 6) + (r >> 2);
-//     r ^= hash2 + 0x9e3779b9 + (r << 6) + (r >> 2);
-//     return r;
-//   }
-// };
-
-// class LocalGrid {
-
-//  public:
-//   explicit LocalGrid(float min_dist, float max_dist);
-
-//   void AddLocalGrid(std::vector<float> local_grid, Eigen::Matrix4f map_to_base_link, Eigen::Matrix4f base_link_to_local_grid);
-
-//   bool IsInside(Eigen::Vector3f map_to_position_translation);
-
-//   bool FindPath(Eigen::Vector3f map_to_position_translation, Eigen::Vector2f& direction);
-
-//   bool AStar(std::pair<int, int> start, std::pair<int, int> goal, std::vector<std::pair<int, int>> &path);
-
-//   std::vector<std::pair<int, int>> GetNeighbors(std::pair<int, int> p);
-//   bool IsInGrid(std::pair<int, int> p);
-//   bool IsFree(std::pair<int, int> p);
-//   float GetEuclideanDist(std::pair<int, int> p1, std::pair<int, int> p2);
-//   float GetWeight(std::pair<int, int> p);
-//  private:
-
-//   // Parameters
-//   float min_dist_;
-//   float max_dist_;
-//   float obstacle_coeff_;
-
-//   // State
-//   std::vector<float> local_grid_;
-//   Eigen::Matrix4f map_to_base_link_;
-//   Eigen::Matrix4f base_link_to_local_grid_;
-// };
-
-// }  // namespace aut_local_planner
-
-// #endif  // AUT_LOCAL_PLANNER_LOCAL_GRID_H_

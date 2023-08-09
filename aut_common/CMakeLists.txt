@@ -6,9 +6,11 @@ add_compile_options(-Wall -Wextra -Wpedantic -Ofast)
 find_package(ament_cmake REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(aut_utils REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 
 set(library_name common)
@@ -19,9 +21,9 @@ include_directories(
 )
 
 add_library(${library_name} SHARED 
-  src/graph.cc
+  src/graph.cc src/transformer.cc
 )
-ament_target_dependencies(${library_name} Eigen3 visualization_msgs geometry_msgs PCL aut_utils)
+ament_target_dependencies(${library_name} Eigen3 visualization_msgs geometry_msgs PCL aut_utils tf2_ros builtin_interfaces)
 target_link_libraries(${library_name} ${Eigen3_LIBRARIES} ${PCL_LIBRARIES})
 
 install(TARGETS
@@ -37,6 +39,6 @@ install(DIRECTORY include/
 
 ament_export_include_directories(include)
 ament_export_libraries(${library_name})
-ament_export_dependencies(Eigen3 visualization_msgs geometry_msgs aut_utils)
+ament_export_dependencies(Eigen3 visualization_msgs geometry_msgs aut_utils tf2_ros builtin_interfaces)
 
 ament_package()

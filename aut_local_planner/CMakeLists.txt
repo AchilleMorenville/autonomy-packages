@@ -9,6 +9,7 @@ find_package(tf2_ros REQUIRED)
 find_package(aut_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(aut_utils REQUIRED)
+find_package(aut_common REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
@@ -20,15 +21,15 @@ include_directories(
 )
 
 add_library(local_planner_impl SHARED
-  src/local_planner.cc src/local_grid.cc
+  src/local_planner.cc src/local_grid.cc src/utils.cc
 )
-ament_target_dependencies(local_planner_impl rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs)
+ament_target_dependencies(local_planner_impl rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs aut_common)
 target_link_libraries(local_planner_impl ${Eigen3_LIBRARIES})
  
 add_executable(local_planner
   src/main.cc
 )
-ament_target_dependencies(local_planner rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs)
+ament_target_dependencies(local_planner rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs aut_common)
 target_link_libraries(local_planner local_planner_impl ${Eigen3_LIBRARIES})
 
 install(TARGETS local_planner_impl
@@ -49,6 +50,6 @@ install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_export_include_directories(include)
 ament_export_libraries(local_planner_impl)
-ament_export_dependencies(rclcpp tf2_ros aut_msgs aut_utils nav_msgs geometry_msgs visualization_msgs)
+ament_export_dependencies(rclcpp tf2_ros aut_msgs aut_utils nav_msgs geometry_msgs visualization_msgs aut_common)
 
 ament_package()
