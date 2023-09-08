@@ -7,6 +7,7 @@ from rclpy.node import Node
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
+from nav_msgs import Odometry
 
 from bosdyn.client import create_standard_sdk
 from bosdyn.client.robot_state import RobotStateClient
@@ -84,6 +85,24 @@ def create_TransformStamped(bosdyn_transform, frame_id, child_frame_id, stamp):
 	trans.transform.rotation.w = bosdyn_transform.rot.w
 	return trans
 
+def create_Odometry(bosdyn_transform, frame_id, child_frame_id, stamp):
+	odom = Odometry()
+	odom.header.stamp = stamp
+	odom.header.frame_id = frame_id
+	
+	odom.child_frame_id = child_frame_id
+
+	odom.pose.pose.position.x = bosdyn_transform.x
+	odom.pose.pose.position.y = bosdyn_transform.y
+	odom.pose.pose.position.z = bosdyn_transform.z
+
+	odom.pose.pose.orientation.x = bosdyn_transform.rot.x
+	odom.pose.pose.orientation.y = bosdyn_transform.rot.y
+	odom.pose.pose.orientation.z = bosdyn_transform.rot.z
+	odom.pose.pose.orientation.w = bosdyn_transform.rot.w
+
+	return odom	
+
 class SpotData(Node):
 
 	def __init__(self):
@@ -122,9 +141,9 @@ class SpotData(Node):
 		self.declare_parameter("spot_local_grid_frequency", 10)
 		self.spot_local_grid_frequency = self.get_parameter("spot_local_grid_frequency").get_parameter_value().integer_value
 
-		# # Publishers
-		# self.ko_publisher = self.create_publisher(Odometry, "aut_spot/odometry/k_odom", 10)
-		# self.vo_publisher = self.create_publisher(Odometry, "aut_spot/odometry/v_odom", 10)
+		# Publishers
+		self.ko_publisher = self.create_publisher(Odometry, "aut_spot/odometry/k_odom", 10)
+		self.vo_publisher = self.create_publisher(Odometry, "aut_spot/odometry/v_odom", 10)
 
 		self.fiducials_publisher = self.create_publisher(Fiducial, "aut_spot/fiducial", 10)
 		self.local_grid_publisher = self.create_publisher(LocalGrid, "aut_spot/local_grid", 10)
@@ -179,17 +198,17 @@ class SpotData(Node):
 		transforms_snapshot = robot_state.kinematic_state.transforms_snapshot
 
 		# Kinematic odometry
-		body_tform_odom = get_a_tform_b(
-			transforms_snapshot,
-			BODY_FRAME_NAME,
-			ODOM_FRAME_NAME
-		)
+		# body_tform_odom = get_a_tform_b(
+		# 	transforms_snapshot,
+		# 	ODOM_FRAME_NAME,
+		# 	BODY_FRAME_NAME
+		# )
 
 		# Vision odometry
-		body_tform_vision = get_a_tform_b(
+		vision_tform_body = get_a_tform_b(
 			transforms_snapshot,
-			BODY_FRAME_NAME,
-			VISION_FRAME_NAME
+			VISION_FRAME_NAME,
+			BODY_FRAME_NAME
 		)
 
 		# Gravity
@@ -199,14 +218,23 @@ class SpotData(Node):
 			"flat_body"
 		)
 
-		ko = create_TransformStamped(body_tform_odom, "base_link", "k_odom", stamp_real)
-		vo = create_TransformStamped(body_tform_vision, "base_link", "v_odom", stamp_real)
+		# ko = create_TransformStamped(body_tform_odom, "base_link", "k_odom", stamp_real)
+		vo = create_TransformStamped(vision_tform_body, "v_odom", "base_link", stamp_real)
 		grav = create_TransformStamped(body_tform_gravity, "base_link", "gravity", stamp_real)
 
-		with self.tf_broadcaster_lock:
-			self.tf_broadcaster.sendTransform(ko)
-			self.tf_broadcaster.sendTransform(vo)
-			self.tf_broadcaster.sendTransform(grav)
+		# with self.tf_broadcaster_lock:
+		# self.tf_broadcaster.sendTransform(ko)
+		self.tf_broadcaster.sendTransform(vo)
+		self.tf_broadcaster.sendTransform(grav)
+
+		# ko = create_Odometry(body_tform_odom, "k_odom", "base_link", stamp_real)
+		# vo = create_Odometry(body_tform_vision, "v_odom", "base_link", stamp_real)
+		# ko_publisher.publish(ko)
+		# vo_publisher.publish(vo)
+		
+		# grav = create_TransformStamped(body_tform_gravity, "base_link", "gravity", stamp_real)
+		# with self.tf_broadcaster_lock:
+		# 	self.tf_broadcaster.sendTransform(grav)
 
 		self.get_logger().info('Published odometries')
 
@@ -275,8 +303,8 @@ class SpotData(Node):
 
 			fid = create_TransformStamped(body_tform_fiducial, "base_link", f"fiducial_{tag_id}", stamp_real)
 
-			with self.tf_broadcaster_lock:
-				self.tf_broadcaster.sendTransform(fid)
+			# with self.tf_broadcaster_lock:
+			self.tf_broadcaster.sendTransform(fid)
 
 			self.get_logger().info('Published fiducial')
 
@@ -325,8 +353,8 @@ class SpotData(Node):
 
 		lg = create_TransformStamped(body_tform_grid, "base_link", "local_grid", stamp_real)
 
-		with self.tf_broadcaster_lock:
-			self.tf_broadcaster.sendTransform(lg)
+		# with self.tf_broadcaster_lock:
+		self.tf_broadcaster.sendTransform(lg)
 
 		self.get_logger().info('Published local grid')
 
