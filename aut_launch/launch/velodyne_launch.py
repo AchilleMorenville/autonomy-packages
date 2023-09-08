@@ -11,7 +11,7 @@ def generate_launch_description():
     dir_path = os.path.dirname(os.path.realpath(__file__))
 
     with open(f"{dir_path}/../params/velodyne_params.yaml", 'r') as f:
-        convert_params = yaml.safe_load(f)['velodyne_convert_node']['ros__parameters']
+        transform_params = yaml.safe_load(f)['velodyne_transform_node']['ros__parameters']
     with open(f"{dir_path}/../params/velodyne_params.yaml", 'r') as f:
         driver_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
 
@@ -22,13 +22,13 @@ def generate_launch_description():
                                                    output='both',
                                                    parameters=[driver_params])
 
-    convert_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_pointcloud')
-    # convert_params_file = os.path.join(convert_share_dir, 'config', 'VLP16-velodyne_transform_node-params.yaml')
-    convert_params['calibration'] = os.path.join(convert_share_dir, 'params', 'VLP16db.yaml')
-    velodyne_convert_node = launch_ros.actions.Node(package='velodyne_pointcloud',
-                                                    executable='velodyne_convert_node',
+    transform_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_pointcloud')
+    # transform_params_file = os.path.join(transform_share_dir, 'config', 'VLP16-velodyne_transform_node-params.yaml')
+    transform_params['calibration'] = os.path.join(transform_share_dir, 'params', 'VLP16db.yaml')
+    velodyne_transform_node = launch_ros.actions.Node(package='velodyne_pointcloud',
+                                                    executable='velodyne_transform_node',
                                                     output='both',
-                                                    parameters=[convert_params])
+                                                    parameters=[transform_params])
 
     laserscan_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_laserscan')
     laserscan_params_file = os.path.join(laserscan_share_dir, 'config', 'default-velodyne_laserscan_node-params.yaml')
@@ -39,7 +39,7 @@ def generate_launch_description():
 
 
     return launch.LaunchDescription([velodyne_driver_node,
-                                     velodyne_convert_node,
+                                     velodyne_transform_node,
                                      velodyne_laserscan_node,
 
                                      launch.actions.RegisterEventHandler(
