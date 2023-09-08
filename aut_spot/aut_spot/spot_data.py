@@ -7,7 +7,7 @@ from rclpy.node import Node
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
-from nav_msgs import Odometry
+from nav_msgs.msg import Odometry
 
 from bosdyn.client import create_standard_sdk
 from bosdyn.client.robot_state import RobotStateClient
