@@ -15,9 +15,10 @@ class Transformer {
 
  public:
   explicit Transformer(std::shared_ptr<tf2_ros::Buffer> tf_buffer);
-
   bool CanTransformMapToBaseLink(builtin_interfaces::msg::Time time);
+  bool CanTransformMapToBaseLink();
   Eigen::Matrix4f LookupTransformMapToBaseLink(builtin_interfaces::msg::Time time);
+  Eigen::Matrix4f LookupTransformMapToBaseLink();
 
  private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;

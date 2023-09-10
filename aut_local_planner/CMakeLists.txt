@@ -13,6 +13,7 @@ find_package(aut_common REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 
 include_directories(
@@ -21,16 +22,23 @@ include_directories(
 )
 
 add_library(local_planner_impl SHARED
-  src/local_planner.cc src/local_grid.cc src/utils.cc
+  src/local_planner.cc src/a_star.cc
 )
-ament_target_dependencies(local_planner_impl rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs aut_common)
+ament_target_dependencies(local_planner_impl rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs aut_common std_srvs)
 target_link_libraries(local_planner_impl ${Eigen3_LIBRARIES})
  
 add_executable(local_planner
   src/main.cc
 )
-ament_target_dependencies(local_planner rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs aut_common)
+ament_target_dependencies(local_planner rclcpp tf2_ros aut_msgs Eigen3 aut_utils nav_msgs geometry_msgs visualization_msgs aut_common std_srvs)
 target_link_libraries(local_planner local_planner_impl ${Eigen3_LIBRARIES})
+
+add_executable(a_star
+  src/a_star.cc
+)
+ament_target_dependencies(a_star Eigen3 aut_utils)
+target_link_libraries(a_star local_planner_impl ${Eigen3_LIBRARIES})
+
 
 install(TARGETS local_planner_impl
   ARCHIVE DESTINATION lib
@@ -38,7 +46,7 @@ install(TARGETS local_planner_impl
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS local_planner
+install(TARGETS local_planner a_star
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -50,6 +58,6 @@ install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_export_include_directories(include)
 ament_export_libraries(local_planner_impl)
-ament_export_dependencies(rclcpp tf2_ros aut_msgs aut_utils nav_msgs geometry_msgs visualization_msgs aut_common)
+ament_export_dependencies(rclcpp tf2_ros aut_msgs aut_utils nav_msgs geometry_msgs visualization_msgs aut_common std_srvs)
 
 ament_package()

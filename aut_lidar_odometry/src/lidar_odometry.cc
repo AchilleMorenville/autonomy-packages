@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <memory>
+#include <mutex>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/transform.h>
@@ -65,6 +66,8 @@ LidarOdometry::LidarOdometry(const rclcpp::NodeOptions& options)
 
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
+  timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&LidarOdometry::LocalMapBuilder, this));
+
   // Memory allocation
   input_all_points_.reset(new pcl::PointCloud<pcl::PointXYZI>());
   input_edge_points_.reset(new pcl::PointCloud<pcl::PointXYZI>());
@@ -101,15 +104,18 @@ void LidarOdometry::FeaturesCallBack(const aut_lidar_odometry::msg::Features::Sh
 
   {
     Timer timer;
+    std::lock_guard<std::mutex> lock(state_mtx_);
+    std::chrono::time_point<std::chrono::high_resolution_clock> start_time_point = std::chrono::high_resolution_clock::now();
     GetInput(features_msg);
-
     ComputeLocalMap();
-
     OptimizeInput();
-
     SaveFrame();
-
     PublishOdom();
+    auto end_time_point = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::time_point_cast<std::chrono::milliseconds>(start_time_point).time_since_epoch().count();
+    auto end = std::chrono::time_point_cast<std::chrono::milliseconds>(end_time_point).time_since_epoch().count();
+    auto duration = end - start;
+    RCLCPP_INFO(this->get_logger(), "Execution time compute local map : %ld", duration);
   }
 }
 
@@ -127,6 +133,8 @@ void LidarOdometry::GetInput(const aut_lidar_odometry::msg::Features::SharedPtr 
 }
 
 void LidarOdometry::ComputeLocalMap() {
+  return;
+
   if (deque_edge_points_.empty()) {
     return;
   }
@@ -220,18 +228,35 @@ void LidarOdometry::SaveFrame() {
     deque_edge_points_.pop_front();
     deque_flat_points_.pop_front();
   }
+
+  if ((int) deque_edge_points_.size() == 1) {
+    local_map_edge_points_->clear();
+    local_map_flat_points_->clear();
+
+    const std::size_t deque_size = deque_edge_points_.size();
+    for (std::size_t i = 0; i < deque_size; ++i) {
+      *local_map_edge_points_ += *deque_edge_points_[i];
+      *local_map_flat_points_ += *deque_flat_points_[i];
+    }
+
+    voxel_grid_edge_.setInputCloud(local_map_edge_points_);
+    voxel_grid_edge_.filter(*local_map_edge_points_);
+
+    voxel_grid_flat_.setInputCloud(local_map_flat_points_);
+    voxel_grid_flat_.filter(*local_map_flat_points_);
+
+    kdtree_local_map_edge_points_->setInputCloud(local_map_edge_points_);
+    kdtree_local_map_flat_points_->setInputCloud(local_map_flat_points_);
+  }
 }
 
 void LidarOdometry::PublishOdom() {
-  // pcl::toROSMsg(*input_flat_points_, temp_points);
-  // pcl::toROSMsg(*input_edge_points_, temp_points);
 
-  input_all_points_msg_.header.frame_id = "base_link";
+  //  Publish point cloud with pose
 
   aut_msgs::msg::PointCloudWithPose point_cloud_with_pose_msg;
-
   point_cloud_with_pose_msg.header = input_header_;
-
+  input_all_points_msg_.header.frame_id = "base_link";
   point_cloud_with_pose_msg.point_cloud = input_all_points_msg_;
 
   Eigen::Quaternionf quat(odom_optimized_.block<3, 3>(0, 0));
@@ -246,41 +271,70 @@ void LidarOdometry::PublishOdom() {
 
   odom_publisher_->publish(point_cloud_with_pose_msg);
 
-  sensor_msgs::msg::PointCloud2 point_cloud_msg;
+  //  Publish local map
 
   pcl::PointCloud<pcl::PointXYZI>::Ptr local_map(new pcl::PointCloud<pcl::PointXYZI>());
-
   *local_map += *local_map_edge_points_;
   *local_map += *local_map_flat_points_;
 
-  // pcl::toROSMsg(*input_flat_points_ds_, point_cloud_msg);
+  sensor_msgs::msg::PointCloud2 point_cloud_msg;
   pcl::toROSMsg(*local_map, point_cloud_msg);
-
-  point_cloud_msg.header.frame_id = "odom";
-
-  // temps_msg.header.frame_id = "odom";
+  point_cloud_msg.header.frame_id = "l_odom";
 
   local_map_publisher_->publish(point_cloud_msg); 
-  // local_map_publisher_->publish(input_all_points_msg_); 
+
+  // Publish odometry to tf2
 
   geometry_msgs::msg::TransformStamped t;
 
   t.header.stamp = input_header_.stamp;
-  t.header.frame_id = "odom";
-  t.child_frame_id = "base_link";
+  t.header.frame_id = "l_odom";
+  t.child_frame_id = "v_odom";
 
-  t.transform.translation.x = odom_optimized_(0, 3);
-  t.transform.translation.y = odom_optimized_(1, 3);
-  t.transform.translation.z = odom_optimized_(2, 3);
+  RCLCPP_INFO(this->get_logger(), "Published odometry with time: %d.%d", input_header_.stamp.sec, input_header_.stamp.nanosec);
 
-  t.transform.rotation.w = quat.w();
-  t.transform.rotation.x = quat.x();
-  t.transform.rotation.y = quat.y();
-  t.transform.rotation.z = quat.z();
+  Eigen::Matrix4f m_l_odom_to_v_odom = odom_optimized_ * aut_utils::InverseTransformation(input_initial_guess_);
+
+  t.transform.translation.x = m_l_odom_to_v_odom(0, 3);
+  t.transform.translation.y = m_l_odom_to_v_odom(1, 3);
+  t.transform.translation.z = m_l_odom_to_v_odom(2, 3);
+
+  Eigen::Quaternionf quat_l_odom_to_v_odom(m_l_odom_to_v_odom.block<3, 3>(0, 0));
+  t.transform.rotation.w = quat_l_odom_to_v_odom.w();
+  t.transform.rotation.x = quat_l_odom_to_v_odom.x();
+  t.transform.rotation.y = quat_l_odom_to_v_odom.y();
+  t.transform.rotation.z = quat_l_odom_to_v_odom.z();
 
   tf_broadcaster_->sendTransform(t);
 
   RCLCPP_INFO(this->get_logger(), "Published odometry");
+}
+
+void LidarOdometry::LocalMapBuilder() {
+  std::lock_guard<std::mutex> lock(state_mtx_);
+  if (deque_edge_points_.empty()) {
+    return;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Update local map");
+
+  local_map_edge_points_->clear();
+  local_map_flat_points_->clear();
+
+  const std::size_t deque_size = deque_edge_points_.size();
+  for (std::size_t i = 0; i < deque_size; ++i) {
+    *local_map_edge_points_ += *deque_edge_points_[i];
+    *local_map_flat_points_ += *deque_flat_points_[i];
+  }
+
+  voxel_grid_edge_.setInputCloud(local_map_edge_points_);
+  voxel_grid_edge_.filter(*local_map_edge_points_);
+
+  voxel_grid_flat_.setInputCloud(local_map_flat_points_);
+  voxel_grid_flat_.filter(*local_map_flat_points_);
+
+  kdtree_local_map_edge_points_->setInputCloud(local_map_edge_points_);
+  kdtree_local_map_flat_points_->setInputCloud(local_map_flat_points_);
 }
 
 }  // namespace aut_lidar_odometry

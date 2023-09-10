@@ -11,7 +11,7 @@ from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.api import robot_state_pb2
 from bosdyn.api import geometry_pb2
 
-from aut_msgs.msg import NavCommand
+from aut_msgs.msg import SpeedCommand
 
 class SpotCommand(Node):
 
@@ -51,20 +51,21 @@ class SpotCommand(Node):
 		command_proto = RobotCommandBuilder.synchro_stand_command()
 		self.command_client.robot_command(lease=None, command=command_proto, end_time_secs=None)
 
-		self.subscription = self.create_subscription(NavCommand, "aut_local_planner/nav_command", self.listener_callback, 10)
+		self.subscription = self.create_subscription(SpeedCommand, "aut_local_planner/speed_command", self.listener_callback, 10)
 
 		time.sleep(2)
 
 	def listener_callback(self, msg):
 
 		params = spot_command_pb2.MobilityParams(
-			vel_limit=geometry_pb2.SE2VelocityLimit(max_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=msg.max_speed, y=msg.max_speed), angular=0.4), min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-msg.max_speed, y=-msg.max_speed), angular=-0.4)),
+			vel_limit=geometry_pb2.SE2VelocityLimit(max_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=0.5, y=0.5), angular=0.4), min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-0.5, y=-0.5), angular=-0.4)),
 			locomotion_hint=spot_command_pb2.HINT_AUTO
 		)
 
-		end_time_secs = time.time() + 1.0
+		end_time_secs = time.time() + 0.5
 		transforms = self.robot_state_client.get_robot_state().kinematic_state.transforms_snapshot
-		command_proto = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(msg.x, msg.y, msg.angle, transforms, params=params)
+		command_proto = RobotCommandBuilder.synchro_velocity_command(msg.v_x, msg.v_y, msg.v_t, params=params)
+		# command_proto = RobotCommandBuilder.synchro_trajectory_command_in_body_frame(msg.x, msg.y, msg.angle, transforms, params=params)
 		self.command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
 
 

@@ -83,6 +83,9 @@ GraphOptimization::GraphOptimization(const rclcpp::NodeOptions& options)
   nbr_frames_before_loop_ = this->get_parameter("nbr_frames_before_loop").get_parameter_value().get<int>();
   this->declare_parameter("loop_candidate_local_map_size", 50);
   loop_candidate_local_map_size_ = this->get_parameter("loop_candidate_local_map_size").get_parameter_value().get<int>();
+
+  this->declare_parameter("start_directly", false);
+  running_ = this->get_parameter("start_directly").get_parameter_value().get<bool>();
   
   callback_group_point_cloud_with_pose_ = this->create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive
@@ -317,12 +320,9 @@ bool GraphOptimization::NeedSave() {
 
 void GraphOptimization::AddOdomFactor() {
   if (poses_6D_.empty()) {
-    {
-      std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-      if (tf_buffer_->canTransform("gravity", "base_link", input_header_.stamp)) {
-        geometry_msgs::msg::Transform trans = tf_buffer_->lookupTransform("gravity", "base_link", input_header_.stamp).transform;
-        corrected_input_odom_ = aut_utils::TransformToMatrix(trans);
-      }
+    if (tf_buffer_->canTransform("gravity", "base_link", input_header_.stamp)) {
+      geometry_msgs::msg::Transform trans = tf_buffer_->lookupTransform("gravity", "base_link", input_header_.stamp).transform;
+      corrected_input_odom_ = aut_utils::TransformToMatrix(trans);
     }
     graph_.add(gtsam::PriorFactor<gtsam::Pose3>(gtsam::Symbol('x', (int) 0), gtsam::Pose3(corrected_input_odom_.cast<double>()), prior_noise_));
     initial_estimate_.insert(gtsam::Symbol('x', (int) 0), gtsam::Pose3(corrected_input_odom_.cast<double>()));
@@ -341,14 +341,11 @@ void GraphOptimization::AddGravityFactor() {
     return;
   }
 
-  tf_buffer_mtx_.lock();
   if (!tf_buffer_->canTransform("gravity", "base_link", input_header_.stamp)) {
-    tf_buffer_mtx_.unlock();
     return;
   }
   geometry_msgs::msg::Transform trans = tf_buffer_->lookupTransform("gravity", "base_link", input_header_.stamp).transform;
   Eigen::Matrix4f gravity_tform_body = aut_utils::TransformToMatrix(trans);
-  tf_buffer_mtx_.unlock();
 
   Eigen::Affine3f affine_gravity_tform_body;
   affine_gravity_tform_body.matrix() = gravity_tform_body;
@@ -428,7 +425,7 @@ void GraphOptimization::PublishPose() {
 
   t.header.stamp = input_header_.stamp;
   t.header.frame_id = "map";
-  t.child_frame_id = "odom";
+  t.child_frame_id = "l_odom";
 
   Eigen::Matrix4f map_tform_body = corrected_input_odom_ * aut_utils::InverseTransformation(input_odom_);
 
@@ -654,6 +651,7 @@ void GraphOptimization::PublishMap() {
 }
 
 void GraphOptimization::Start(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  (void)request;
   {
     std::lock_guard<std::mutex> lock(running_mtx_);
     running_ = true;
@@ -664,6 +662,7 @@ void GraphOptimization::Start(const std::shared_ptr<std_srvs::srv::Trigger::Requ
 }
 
 void GraphOptimization::Stop(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  (void)request;
   {
     std::lock_guard<std::mutex> lock(running_mtx_);
     running_ = false;
@@ -674,7 +673,7 @@ void GraphOptimization::Stop(const std::shared_ptr<std_srvs::srv::Trigger::Reque
 }
 
 void GraphOptimization::Reset(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-
+  (void)request;
   {
     std::lock_guard<std::mutex> lock(running_mtx_);
     if (running_) {
@@ -776,7 +775,7 @@ void GraphOptimization::SaveMap(const std::shared_ptr<aut_msgs::srv::SaveMap::Re
 
   pcl::PointCloud<pcl::PointXYZI>::Ptr map(new pcl::PointCloud<pcl::PointXYZI>());  
 
-  for (int i = 0; i < copy_poses_6D.size(); ++i) {
+  for (int i = 0; i < (int) copy_poses_6D.size(); ++i) {
     pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_key_frame_point_cloud(new pcl::PointCloud<pcl::PointXYZI>());
 
     state_mtx_.lock();
@@ -789,7 +788,7 @@ void GraphOptimization::SaveMap(const std::shared_ptr<aut_msgs::srv::SaveMap::Re
     *map += *filtered_key_frame_point_cloud;
 
     octomap::Pointcloud* p = new octomap::Pointcloud();
-    for (int j = 0; j < transformed_key_frame_point_cloud->points.size(); ++j) {
+    for (int j = 0; j < (int) transformed_key_frame_point_cloud->points.size(); ++j) {
       octomap::point3d point(
         transformed_key_frame_point_cloud->points[j].x, 
         transformed_key_frame_point_cloud->points[j].y, 
@@ -824,7 +823,7 @@ void GraphOptimization::SaveMap(const std::shared_ptr<aut_msgs::srv::SaveMap::Re
 
       double fiducial_seconds = rclcpp::Time(fiducials_time_[tag_id]).seconds();
 
-      for (int i = 0; i < copy_poses_6D.size() - 1; ++i) {
+      for (int i = 0; i < (int) copy_poses_6D.size() - 1; ++i) {
 
         double before_seconds = rclcpp::Time(copy_key_frames_headers[i].stamp).seconds();
         double after_seconds = rclcpp::Time(copy_key_frames_headers[i + 1].stamp).seconds();
@@ -859,7 +858,7 @@ void GraphOptimization::SaveMap(const std::shared_ptr<aut_msgs::srv::SaveMap::Re
   std::ofstream file_fiducials(std::string(request->destination) + std::string("/fiducials.txt"));
   file_fiducials << fiducials_tag_id_map.size() << "\n";
 
-  for (int i = 0; i < fiducials_tag_id_map.size(); ++i) {
+  for (int i = 0; i < (int) fiducials_tag_id_map.size(); ++i) {
     file_fiducials << fiducials_tag_id_map[i] << "\n";
     file_fiducials << fiducials_map_to_fiducial[i] << "\n";
   }

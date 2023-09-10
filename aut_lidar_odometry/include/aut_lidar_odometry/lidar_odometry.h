@@ -4,6 +4,7 @@
 #include <deque>
 #include <memory>
 #include <chrono>
+#include <mutex>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/header.hpp>
@@ -68,6 +69,8 @@ class LidarOdometry : public rclcpp::Node {
 
   void PublishOdom();
 
+  void LocalMapBuilder();
+
   // Parameters
   float edge_leaf_size_;
   float flat_leaf_size_;
@@ -127,6 +130,12 @@ class LidarOdometry : public rclcpp::Node {
 
   // tf2 Broadcaster
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
+  // Timer
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  // Mutex
+  std::mutex state_mtx_;
 
 };
 

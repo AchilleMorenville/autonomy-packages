@@ -24,7 +24,7 @@ class MapPublisher : public rclcpp::Node {
     publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("aut_map_publisher/map", 10);
     marker_array_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("aut_map_publisher/graph", 10);
     timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&MapPublisher::timer_callback, this));
-    std::string map_path("/ros2_ws/src/data/nav-1/map.pcd");
+    std::string map_path("/ros2_ws/src/data/home-map/map.pcd");
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr map_cloud(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::io::loadPCDFile<pcl::PointXYZI> (map_path, *map_cloud);
@@ -32,7 +32,7 @@ class MapPublisher : public rclcpp::Node {
     pcl::toROSMsg(*map_cloud, map_msg);
     map_msg.header.frame_id = "map";
 
-    std::string graph_path("/ros2_ws/src/data/nav-1/graph.txt");
+    std::string graph_path("/ros2_ws/src/data/home-map/graph.txt");
     nav_graph_.LoadFile(graph_path);
 
     nav_graph_.Simplify(0.5);

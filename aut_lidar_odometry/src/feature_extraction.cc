@@ -14,6 +14,8 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -36,7 +38,7 @@ struct by_value {
 FeatureExtraction::FeatureExtraction(const rclcpp::NodeOptions& options)
     : Node("feature_extraction", options) {
       
-  this->declare_parameter("max_cache_size", 2);
+  this->declare_parameter("max_cache_size", 20);
   max_cache_size_ = this->get_parameter("max_cache_size").get_parameter_value().get<int>();    
 
   RCLCPP_INFO(this->get_logger(), "Received cloud");
@@ -77,35 +79,20 @@ FeatureExtraction::FeatureExtraction(const rclcpp::NodeOptions& options)
 
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  // Callback gropus
-  // callback_group_odom_ = this->create_callback_group(
+  // // Subscriptions
+  // v_odom_callback_group_ = this->create_callback_group(
   //     rclcpp::CallbackGroupType::MutuallyExclusive
   // );
 
-  // rclcpp::SubscriptionOptions odom_options = rclcpp::SubscriptionOptions();
-  // odom_options.callback_group = callback_group_odom_;
-
-  // // Subscriptions
-  // // v_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-  // //     "aut_spot/odometry/v_odom", 10,
-  // //     std::bind(&FeatureExtraction::VOdomCallBack, this, 
-  // //               std::placeholders::_1),
-  // //     odom_options
-  // // ); TODO: Get other data
+  // rclcpp::SubscriptionOptions v_odom_options = rclcpp::SubscriptionOptions();
+  // v_odom_options.callback_group = v_odom_callback_group_;
 
   // v_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-  //     "/spot_driver/odometry/vo_odom", 10,
-  //     std::bind(&FeatureExtraction::VOdomCallBack, this, 
-  //               std::placeholders::_1),
-  //     odom_options
+  //   "aut_spot/odometry/v_odom", 10, 
+  //   std::bind(&FeatureExtraction::VOdomCallBack, this, std::placeholders::_1),
+  //   v_odom_options
   // );
 
-  // k_odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-  //     "/spot_driver/odometry/ko_odom", 10, 
-  //     std::bind(&FeatureExtraction::KOdomCallBack, this, 
-  //               std::placeholders::_1), 
-  //     odom_options
-  // );
 
   point_cloud_subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
       "velodyne_points", 10, 
@@ -153,54 +140,42 @@ void FeatureExtraction::ResetState() {
   flat_points_scan_ds_->clear();
 } 
 
-// void FeatureExtraction::KOdomCallBack(
-//     const nav_msgs::msg::Odometry::SharedPtr k_odom_msg) {
-//   geometry_msgs::msg::TransformStamped tf_stamped;
-//   tf_stamped.header = k_odom_msg->header;
-//   tf_stamped.child_frame_id = k_odom_msg->child_frame_id;
-//   tf_stamped.transform.translation.x = k_odom_msg->pose.pose.position.x;
-//   tf_stamped.transform.translation.y = k_odom_msg->pose.pose.position.y;
-//   tf_stamped.transform.translation.z = k_odom_msg->pose.pose.position.z;
-//   tf_stamped.transform.rotation = k_odom_msg->pose.pose.orientation;
-//   {
-//     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-//     tf_buffer_->setTransform(tf_stamped, "k_odom", false);
-//   }
-// }
-
 // void FeatureExtraction::VOdomCallBack(
 //     const nav_msgs::msg::Odometry::SharedPtr v_odom_msg) {
-//   geometry_msgs::msg::TransformStamped tf_stamped;
-//   tf_stamped.header = v_odom_msg->header;
-//   tf_stamped.child_frame_id = v_odom_msg->child_frame_id;
-//   tf_stamped.transform.translation.x = v_odom_msg->pose.pose.position.x;
-//   tf_stamped.transform.translation.y = v_odom_msg->pose.pose.position.y;
-//   tf_stamped.transform.translation.z = v_odom_msg->pose.pose.position.z;
-//   tf_stamped.transform.rotation = v_odom_msg->pose.pose.orientation;
-//   {
-//     std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-//     tf_buffer_->setTransform(tf_stamped, "v_odom", false);
-//   }
+//   geometry_msgs::msg::TransformStamped t;
+//   t.header = v_odom_msg->header;
+//   t.child_frame_id = v_odom_msg->child_frame_id;
+//   t.transform.translation.x = v_odom_msg->pose.pose.position.x;
+//   t.transform.translation.y = v_odom_msg->pose.pose.position.y;
+//   t.transform.translation.z = v_odom_msg->pose.pose.position.z;
+//   t.transform.rotation = v_odom_msg->pose.pose.orientation;
+
+//   std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
+//   tf_buffer_->setTransform(t, "spot");
 // }
 
 void FeatureExtraction::PointCloudCallBack(
     const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg) {
 
+  rclcpp::Time init_time = this->get_clock()->now();
+
   ResetState();
 
   RCLCPP_INFO(this->get_logger(), "Received cloud");
 
-  cache_point_cloud_msg_.push_back(*point_cloud_msg);
-  if ((int) cache_point_cloud_msg_.size() > max_cache_size_) {
-    cache_point_cloud_msg_.pop_front();
-  }
+  // cache_point_cloud_msg_.push_back(*point_cloud_msg);
+  // if ((int) cache_point_cloud_msg_.size() > max_cache_size_) {
+  //   cache_point_cloud_msg_.pop_front();
+  // }
+
+  pcl::moveFromROSMsg(*point_cloud_msg, *current_cloud_);
+  current_header_ = point_cloud_msg->header;
 
   if (!CanProcessPointCloud()) {
     RCLCPP_INFO(this->get_logger(), "Cannot process cloud, queue size : %d", (int) cache_point_cloud_msg_.size());
-    // cache_point_cloud_msg_.pop_front();
     return;
   }
-  cache_point_cloud_msg_.pop_front();
+  // cache_point_cloud_msg_.pop_front();
 
   PreprocessPointCloud();
 
@@ -215,41 +190,37 @@ void FeatureExtraction::PointCloudCallBack(
   ExctractFeatures();
 
   PublishFeatures();
+
+  rclcpp::Time end_time = this->get_clock()->now();
+
+  RCLCPP_INFO(this->get_logger(), "Time to process : %f", (end_time - init_time).seconds());
 }
 
 bool FeatureExtraction::CanProcessPointCloud() {
 
-  sensor_msgs::msg::PointCloud2 current_cloud_msg = cache_point_cloud_msg_.front();
-  pcl::moveFromROSMsg(current_cloud_msg, *current_cloud_);
+  // sensor_msgs::msg::PointCloud2 current_cloud_msg = cache_point_cloud_msg_.front();
+  // pcl::moveFromROSMsg(current_cloud_msg, *current_cloud_);
 
-  current_header_ = cache_point_cloud_msg_.front().header;
+  // current_header_ = cache_point_cloud_msg_.front().header;
+
   long current_stamp_nano = rclcpp::Time(current_header_.stamp).nanoseconds();
+
+  RCLCPP_INFO(this->get_logger(), "Current stamp : %f", rclcpp::Time(current_header_.stamp).seconds());
 
   current_point_start_time_ = current_cloud_->points.front().time;
   current_point_end_time_ = current_cloud_->points.back().time;
+
+  RCLCPP_INFO(this->get_logger(), "first point delta : %f, last point delta : %f", current_point_start_time_, current_point_end_time_);
   
-  current_start_time_cloud_ = current_stamp_nano + long(current_point_start_time_ * 1e9);
-  current_end_time_cloud_ = current_stamp_nano + long(current_point_end_time_ * 1e9);
+  current_start_time_cloud_ = current_stamp_nano + static_cast<long>(current_point_start_time_ * 1e9);
+  current_end_time_cloud_ = current_stamp_nano + static_cast<long>(current_point_end_time_ * 1e9);
 
-  bool can_transform_start = false;
-  bool can_transform_end = false;
-  {
-    std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-
-    std::string* err1 = new std::string();
-    std::string* err2 = new std::string();
-
-    can_transform_start = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_), rclcpp::Duration::from_seconds(0.05), err1);
-    can_transform_end = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_), rclcpp::Duration::from_seconds(0.05), err2);
-  
-    RCLCPP_INFO(this->get_logger(), (*err1).c_str());
-    RCLCPP_INFO(this->get_logger(), (*err2).c_str());
-  }
+  bool can_transform_start = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_), rclcpp::Duration::from_seconds(0.05));
+  bool can_transform_end = tf_buffer_->canTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_), rclcpp::Duration::from_seconds(0.05));
 
   if (!can_transform_start) {
     RCLCPP_INFO(this->get_logger(), "Cannot transform start");
   }
-
   if (!can_transform_end) {
     RCLCPP_INFO(this->get_logger(), "Cannot transform end");
   }
@@ -266,11 +237,8 @@ void FeatureExtraction::PreprocessPointCloud() {
   std::vector<int> indices;
   pcl::removeNaNFromPointCloud(*current_cloud_, *current_cloud_, indices); // needed the include <pcl/filters/impl/filter.hpp>
 
-  {
-    std::lock_guard<std::mutex> lock(tf_buffer_mtx_);
-    transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
-    transform_end_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_));
-  }
+  transform_start_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_start_time_cloud_));
+  transform_end_ = tf_buffer_->lookupTransform("v_odom", "base_link", rclcpp::Time(current_end_time_cloud_));
 
   rotation_start_ = Eigen::Quaternionf(transform_start_.transform.rotation.w, 
                                        transform_start_.transform.rotation.x, 
@@ -293,8 +261,6 @@ void FeatureExtraction::PreprocessPointCloud() {
 
   affine_end_.translation() = translation_end_;
   affine_end_.linear() = rotation_end_.toRotationMatrix();
-
-  // TODO: Remove this part (add laser to tf2)
 
   affine_start_ = affine_start_ * affine_body_tform_velodyne_;
   affine_end_ = affine_end_ * affine_body_tform_velodyne_;
@@ -393,6 +359,7 @@ void FeatureExtraction::OrganizeCloud() {
 
 void FeatureExtraction::ComputeSmoothness() {
   int cloud_size = (int) organized_cloud_->points.size();
+  RCLCPP_INFO(this->get_logger(), "Size point cloud : %d", cloud_size);
   for (int i = 5; i < cloud_size - 5; ++i) {
     float diff_range = cloud_range_[i - 5] + cloud_range_[i - 4] 
                      + cloud_range_[i - 3] + cloud_range_[i - 2] 
@@ -533,7 +500,7 @@ void FeatureExtraction::PublishFeatures() {
   pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_organized_cloud(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_organized_cloud(new pcl::PointCloud<pcl::PointXYZI>);
 
-  for (int i = 0; i < organized_cloud_->points.size(); ++i) {
+  for (int i = 0; i < (int) organized_cloud_->points.size(); ++i) {
 
     pcl::PointXYZI point;
     point.x = organized_cloud_->points[i].x;

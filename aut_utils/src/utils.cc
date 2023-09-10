@@ -14,6 +14,24 @@
 
 namespace aut_utils {
 
+Eigen::Affine3f PoseToAffine(geometry_msgs::msg::Pose& pose) {
+  Eigen::Quaternionf q(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
+  Eigen::Vector3f t(pose.position.x, pose.position.y, pose.position.z);
+  Eigen::Affine3f a;
+  a.translation() = t;
+  a.linear() = q.toRotationMatrix();
+  return a;
+}
+
+Eigen::Affine3f TransformToAffine(geometry_msgs::msg::Transform& transform) {
+  Eigen::Quaternionf q(transform.rotation.w, transform.rotation.x, transform.rotation.y, transform.rotation.z);
+  Eigen::Vector3f t(transform.translation.x, transform.translation.y, transform.translation.z);
+  Eigen::Affine3f a;
+  a.translation() = t;
+  a.linear() = q.toRotationMatrix();
+  return a;
+}
+
 Eigen::Matrix4f TransformToMatrix(geometry_msgs::msg::Transform& transform) {
   Eigen::Quaternionf rot(transform.rotation.w, transform.rotation.x, transform.rotation.y, transform.rotation.z);
   Eigen::Vector3f trans(transform.translation.x, transform.translation.y, transform.translation.z);

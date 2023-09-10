@@ -153,6 +153,7 @@ class FeatureExtraction : public rclcpp::Node {
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_subscription_;
 
   // Callback groups
+  rclcpp::CallbackGroup::SharedPtr v_odom_callback_group_;
   rclcpp::CallbackGroup::SharedPtr callback_group_odom_;
 
   // Publisher

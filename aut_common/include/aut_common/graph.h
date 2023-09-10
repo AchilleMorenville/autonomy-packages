@@ -41,6 +41,8 @@ class Graph {
 
   void Reset();
 
+  bool Empty();
+
  private:
 
   int n_;

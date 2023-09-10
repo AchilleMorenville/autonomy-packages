@@ -1,0 +1,8 @@
+# Request
+---
+# Result
+bool success
+---
+# Feedback
+float32 distance
+string msg

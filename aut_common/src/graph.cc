@@ -492,4 +492,8 @@ void Graph::RemoveEdge(int id1, int id2) {
   }
 }
 
+bool Graph::Empty() {
+  return graph_.empty();
+}
+
 }  // namespace aut_common

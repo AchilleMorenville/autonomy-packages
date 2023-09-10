@@ -200,7 +200,7 @@ void MonteCarloLocalization::PointCloudWithPoseCallBack(const aut_msgs::msg::Poi
     Eigen::Matrix4f displacement = aut_utils::GetDifferenceTransformation(last_odom_to_base_link_, odom_to_base_link_current);
 
     for (int i = 0; i < n_particles_; ++i) {
-      particles_[i] = particles_[i] * displacement * RandomMatrix(0.01, 0.01, 0.01, 0.05, 0.05, 0.05);
+      particles_[i] = particles_[i] * displacement * RandomMatrix(0.005, 0.005, 0.005, 0.02, 0.02, 0.02);
       // particles_[i] = particles_[i] * displacement;
     }
 
@@ -228,10 +228,10 @@ void MonteCarloLocalization::PointCloudWithPoseCallBack(const aut_msgs::msg::Poi
   geometry_msgs::msg::TransformStamped t;
 
   t.header.stamp = point_cloud_with_pose_msg->header.stamp;
-  t.header.frame_id = "map";
-  t.child_frame_id = "odom";
+  t.header.frame_id = "l_odom";
+  t.child_frame_id = "map";
 
-  Eigen::Matrix4f map_to_odom = best_particles * aut_utils::InverseTransformation(odom_to_base_link_current);
+  Eigen::Matrix4f map_to_odom = aut_utils::InverseTransformation(best_particles * aut_utils::InverseTransformation(odom_to_base_link_current));
 
   t.transform.translation.x = map_to_odom(0, 3);
   t.transform.translation.y = map_to_odom(1, 3);
@@ -308,9 +308,9 @@ void MonteCarloLocalization::Correct(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud)
 
     float w = 0;
 
-    for (int j = 0; j < cloud_trans->points.size(); ++j) {
+    for (int j = 0; j < static_cast<int>(cloud_trans->points.size()); ++j) {
 
-      float range = (particles_[i](0, 3) - cloud_trans->points[j].x) * (particles_[i](0, 3) - cloud_trans->points[j].x) + (particles_[i](1, 3) - cloud_trans->points[j].y) * (particles_[i](1, 3) - cloud_trans->points[j].y) + (particles_[i](2, 3) - cloud_trans->points[j].z) * (particles_[i](2, 3) - cloud_trans->points[j].z);
+      // float range = (particles_[i](0, 3) - cloud_trans->points[j].x) * (particles_[i](0, 3) - cloud_trans->points[j].x) + (particles_[i](1, 3) - cloud_trans->points[j].y) * (particles_[i](1, 3) - cloud_trans->points[j].y) + (particles_[i](2, 3) - cloud_trans->points[j].z) * (particles_[i](2, 3) - cloud_trans->points[j].z);
 
       octomap::point3d endPoint(cloud_trans->points[j].x, cloud_trans->points[j].y, cloud_trans->points[j].z);
       float dist = map_edt->getDistance(endPoint);
@@ -333,13 +333,13 @@ void MonteCarloLocalization::Resample() {
   // Normalize weigths
   float max_weight = -std::numeric_limits<float>::max();
 
-  for (int i = 0; i < weights_.size(); ++i) {
+  for (int i = 0; i < static_cast<int>(weights_.size()); ++i) {
     if (weights_[i] > max_weight) {
       max_weight = weights_[i];
     }
   }
 
-  for (int i = 0; i < weights_.size(); ++i) {
+  for (int i = 0; i < static_cast<int>(weights_.size()); ++i) {
     weights_[i] = std::exp(weights_[i] - max_weight);
   }
 
@@ -388,8 +388,14 @@ void MonteCarloLocalization::FiducialCallBack(const aut_msgs::msg::Fiducial::Sha
     return;
   }
 
-  if (!tf_buffer_->canTransform("odom", "base_link", fiducial_msg->header.stamp)) {
+  if (!tf_buffer_->canTransform("v_odom", "base_link", fiducial_msg->header.stamp)) {
     return;
+  }
+
+  if (!tf_buffer_->canTransform("l_odom", "v_odom", fiducial_msg->header.stamp)) {
+    if (!tf_buffer_->canTransform("l_odom", "v_odom", tf2::TimePointZero)) {
+      return;
+    }
   }
 
   float squared_dist = fiducial_msg->pose.translation.x * fiducial_msg->pose.translation.x
@@ -407,6 +413,8 @@ void MonteCarloLocalization::FiducialCallBack(const aut_msgs::msg::Fiducial::Sha
 }
 
 void MonteCarloLocalization::Start(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  (void)request;
+
   {
     std::lock_guard<std::mutex> lock(running_mtx_);
 
@@ -423,6 +431,8 @@ void MonteCarloLocalization::Start(const std::shared_ptr<std_srvs::srv::Trigger:
 }
 
 void MonteCarloLocalization::Stop(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  (void)request;
+
   {
     std::lock_guard<std::mutex> lock(running_mtx_);
     running_ = false;
@@ -433,6 +443,8 @@ void MonteCarloLocalization::Stop(const std::shared_ptr<std_srvs::srv::Trigger::
 }
 
 void MonteCarloLocalization::LoadMapService(const std::shared_ptr<aut_msgs::srv::LoadMap::Request> request, std::shared_ptr<aut_msgs::srv::LoadMap::Response> response) {
+
+  (void)request;
 
   {
     std::lock_guard<std::mutex> lock(running_mtx_);

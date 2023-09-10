@@ -11,6 +11,8 @@
 
 namespace aut_utils {
 
+Eigen::Affine3f PoseToAffine(geometry_msgs::msg::Pose& pose);
+Eigen::Affine3f TransformToAffine(geometry_msgs::msg::Transform& transform);
 Eigen::Matrix4f TransformToMatrix(geometry_msgs::msg::Transform& transform);
 geometry_msgs::msg::Pose MatrixToPose(Eigen::Matrix4f matrix);
 Eigen::Matrix4f GetDifferenceTransformation(Eigen::Matrix4f m0, Eigen::Matrix4f m1);
