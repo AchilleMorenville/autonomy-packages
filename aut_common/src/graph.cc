@@ -478,9 +478,9 @@ void Graph::Reset() {
   poses_.clear();
 }
 
-void Graph::RemoveEdge(int id1, int id2) {
+bool Graph::RemoveEdge(int id1, int id2) {
   if (graph_.find(id1) == graph_.end() || graph_.find(id2) == graph_.end()) {
-    return;
+    return false;
   }
   auto it1 = std::find(graph_[id1].begin(), graph_[id1].end(), id2);
   if (it1 != graph_[id1].end()) {
@@ -490,6 +490,7 @@ void Graph::RemoveEdge(int id1, int id2) {
   if (it2 != graph_[id2].end()) {
     graph_[id2].erase(it2);
   }
+  return true;
 }
 
 bool Graph::Empty() {

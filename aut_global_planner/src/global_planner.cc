@@ -114,7 +114,12 @@ void GlobalPlanner::GraphModifService(
   nav_graph_has_changed_ = true;
   int position_1_idx = nav_graph_.ClosestNode(position_1);
   int position_2_idx = nav_graph_.ClosestNode(position_2);
-  nav_graph_.RemoveEdge(position_1_idx, position_2_idx);
+  bool removed = nav_graph_.RemoveEdge(position_1_idx, position_2_idx);
+  if (removed) {
+    RCLCPP_INFO(this->get_logger(), "Remove edge");
+  } else {
+    RCLCPP_INFO(this->get_logger(), "Cannot remove edge");
+  }
   response->success = true;
 }
 
@@ -202,6 +207,9 @@ void GlobalPlanner::execute(
       return;
     }
     if (nav_graph_has_changed_) {
+
+      RCLCPP_INFO(this->get_logger(), "Modify graph");
+
       nav_graph_has_changed_ = false;
       Eigen::Matrix4f current_pose = transformer_->LookupTransformMapToBaseLink();
       path_poses.clear();

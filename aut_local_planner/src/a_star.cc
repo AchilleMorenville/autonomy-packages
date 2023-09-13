@@ -59,6 +59,12 @@ bool AStar::SetTarget(const Eigen::Matrix4f& map_to_target) {
   return Accessible(target_coord_);
 }
 
+bool AStar::InsideGrid(const Eigen::Matrix4f& map_to_target) {
+  Eigen::Matrix4f grid_to_target = grid_to_map_ * map_to_target;
+  std::pair<int, int> coord = GetCoordinates(grid_to_target);
+  return InsideGrid(coord);
+}
+
 inline std::pair<int, int> AStar::GetCoordinates(const Eigen::Matrix4f& grid_to_pose) {
   return std::pair<int, int>{static_cast<int>(grid_to_pose(0, 3) / cell_size_),
                              static_cast<int>(grid_to_pose(1, 3) / cell_size_)};

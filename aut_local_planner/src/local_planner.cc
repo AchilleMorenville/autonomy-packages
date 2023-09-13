@@ -25,8 +25,13 @@
 namespace aut_local_planner {
 
 LocalPlanner::LocalPlanner(const rclcpp::NodeOptions& options)
-    : Node("local_planner", options), a_star_(128, 128, 0.03f, 0.25f, 0.55f, 3.0f) {
+    : Node("local_planner", options), a_star_(128, 128, 0.03f, 0.3f, 0.7f, 3.0f) {
   path_is_set_ = false;
+
+  closest_pose_it_ = global_path_poses_.end();
+  last_target_idx_ = -1;
+
+  count_of_failed = 0;
 
   //tf
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -82,34 +87,105 @@ void LocalPlanner::LocalGridCallBack(
   Eigen::Matrix4f current_pose = transformer_->LookupTransformMapToBaseLink(local_grid_msg->header.stamp);
 
   std::vector<Eigen::Matrix4f> select_global_path;
-
+  int size_global_path = 0;
+  int size_select_path = 0;
   {
     std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
-    auto closest_it = global_path_poses_.begin();
+    size_global_path = static_cast<int>(global_path_poses_.size());
+    auto closest_it = closest_pose_it_ != global_path_poses_.end() ? closest_pose_it_ : global_path_poses_.begin();
     float closest_dist = (current_pose.block<3, 1>(0, 3) - closest_it->block<3, 1>(0, 3)).norm();
-    for (auto it = global_path_poses_.begin(); it != global_path_poses_.end(); ++it) {
+    for (auto it = closest_it; it != global_path_poses_.end(); ++it) {
       float dist = (current_pose.block<3, 1>(0, 3) - it->block<3, 1>(0, 3)).norm();
       if (dist < closest_dist) {
         closest_dist = dist;
         closest_it = it;
       }
     }
-
+    closest_pose_it_ = closest_it;
     select_global_path = std::vector<Eigen::Matrix4f>(closest_it, global_path_poses_.end());
+    size_select_path = static_cast<int>(select_global_path.size());
   }
 
   nav_msgs::msg::OccupancyGrid map = LocalGridToOccupancyGrid(local_grid_msg->local_grid, local_grid_msg->pose);
 
-  for (auto rit = select_global_path.rbegin(); rit != select_global_path.rend(); ++rit) {
+  bool first = true;
+  for (int i = static_cast<int>(select_global_path.size() - 1); i >= 0; --i) {
     a_star_.SetGrid(local_grid_msg->local_grid, 
                     aut_utils::InverseTransformation(
                         aut_utils::TransformToMatrix(local_grid_msg->pose)), 
                     current_pose);
-    Eigen::Matrix4f pose = *rit;
-    if (!a_star_.SetTarget(pose)) { continue; }
+    Eigen::Matrix4f pose = select_global_path[i];
+    bool is_inside = a_star_.InsideGrid(pose);
+
+    if (!is_inside) { continue; }
+
+    if (first) {
+      if (size_global_path - size_select_path + i > last_target_idx_) {
+        last_target_idx_ = size_global_path - size_select_path + i;
+        count_of_failed = 0;
+      } else {
+        ++count_of_failed;
+      }
+      first = false;
+    }
+
+    if (count_of_failed >= 150) {
+      RCLCPP_INFO(this->get_logger(), "\033[1;31m Fail so send modif \033[0m");
+      RCLCPP_INFO(this->get_logger(), "\033[1;31m Fail so send modif \033[0m");
+      RCLCPP_INFO(this->get_logger(), "\033[1;31m Fail so send modif \033[0m");
+      RCLCPP_INFO(this->get_logger(), "\033[1;31m Fail so send modif \033[0m");
+      auto graph_modif_request = std::make_shared<aut_msgs::srv::GraphModif::Request>();
+      graph_modif_request->position_2.x = select_global_path[i](0, 3);
+      graph_modif_request->position_2.y = select_global_path[i](1, 3);
+      graph_modif_request->position_2.z = select_global_path[i](2, 3);
+
+      graph_modif_request->position_1.x = select_global_path[i - 1](0, 3);
+      graph_modif_request->position_1.y = select_global_path[i - 1](1, 3);
+      graph_modif_request->position_1.z = select_global_path[i - 1](2, 3);
+
+      auto graph_modif_result = graph_modif_client_->async_send_request(graph_modif_request);
+      std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
+      path_is_set_ = false;
+      global_path_poses_.clear();
+      closest_pose_it_ = global_path_poses_.end();
+      last_target_idx_ = -1;
+      count_of_failed = 0;
+      break;
+    }
+
+    // first = false;
+
+    if (!a_star_.SetTarget(pose)) { 
+      continue; 
+    }
     std::vector<Eigen::Vector2f> local_path;
     bool found_path = a_star_.GetPath(local_path);
-    if (!found_path) { continue; }
+    if (!found_path) { 
+      continue; 
+    }
+
+    // if (count_of_failed >= 100) {
+    //   RCLCPP_INFO(this->get_logger(), "Stuck count of failed");
+    //   {
+    //     std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
+    //     auto graph_modif_request = std::make_shared<aut_msgs::srv::GraphModif::Request>();
+    //     graph_modif_request->position_2.x = global_path_poses_[last_target_idx_](0, 3);
+    //     graph_modif_request->position_2.y = global_path_poses_[last_target_idx_](1, 3);
+    //     graph_modif_request->position_2.z = global_path_poses_[last_target_idx_](2, 3);
+
+    //     graph_modif_request->position_1.x = global_path_poses_[last_target_idx_ - 1](0, 3);
+    //     graph_modif_request->position_1.y = global_path_poses_[last_target_idx_ - 1](1, 3);
+    //     graph_modif_request->position_1.z = global_path_poses_[last_target_idx_ - 1](2, 3);
+
+    //     auto graph_modif_result = graph_modif_client_->async_send_request(graph_modif_request);
+    //     path_is_set_ = false;
+    //     global_path_poses_.clear();
+    //     closest_pose_it_ = global_path_poses_.end();
+    //     last_target_idx_ = -1;
+    //     count_of_failed = 0;
+    //   }
+    //   return;
+    // }
     
     // Only for occupancy
     std::vector<std::pair<int, int>> path_idx;
@@ -119,8 +195,8 @@ void LocalPlanner::LocalGridCallBack(
     }
     // --------
 
-    if (local_path[local_path.size() - 1].norm() <= 0.15) { // if we are really close to the target we "must" select
-      if (rit == select_global_path.rbegin()) {
+    if (local_path[local_path.size() - 1].norm() <= 0.20) { // if we are really close to the target we "must" select
+      if (i == static_cast<int>(select_global_path.size() - 1)) {
         RCLCPP_INFO(this->get_logger(), "Goal achieved");
         auto goal_achieved_request = std::make_shared<std_srvs::srv::Trigger::Request>();
         auto goal_achieved_result = goal_achieved_client_->async_send_request(goal_achieved_request);
@@ -128,81 +204,100 @@ void LocalPlanner::LocalGridCallBack(
         {
           std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
           global_path_poses_.clear();
+          closest_pose_it_ = global_path_poses_.end();
+          last_target_idx_ = -1;
+          count_of_failed = 0;
         }
-        // Send goal achieved and reset
       } else {
-        RCLCPP_INFO(this->get_logger(), "Stuck");
-        auto graph_modif_request = std::make_shared<aut_msgs::srv::GraphModif::Request>();
-        graph_modif_request->position_2.x = (*rit)(0, 3);
-        graph_modif_request->position_2.y = (*rit)(1, 3);
-        graph_modif_request->position_2.z = (*rit)(2, 3);
-
-        graph_modif_request->position_1.x = (*(rit + 1))(0, 3);
-        graph_modif_request->position_1.y = (*(rit + 1))(1, 3);
-        graph_modif_request->position_1.z = (*(rit + 1))(2, 3);
-
-        auto graph_modif_result = graph_modif_client_->async_send_request(graph_modif_request);
-        path_is_set_ = false;
-        {
-          std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
-          global_path_poses_.clear();
-        }
+        // ++count_of_failed;
+        break;
       }
+      
+      // Send goal achieved and reset
+      // if (i == static_cast<int>(select_global_path.size() - 1)) {
+      //   RCLCPP_INFO(this->get_logger(), "Goal achieved");
+      //   auto goal_achieved_request = std::make_shared<std_srvs::srv::Trigger::Request>();
+      //   auto goal_achieved_result = goal_achieved_client_->async_send_request(goal_achieved_request);
+      //   path_is_set_ = false;
+      //   {
+      //     std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
+      //     global_path_poses_.clear();
+      //     closest_pose_it_ = global_path_poses_.end();
+      //     last_target_idx_ = -1;
+      //     count_of_failed = 0;
+      //   }
+      //   // Send goal achieved and reset
+      // } else {
+      //   RCLCPP_INFO(this->get_logger(), "Stuck");
+      //   auto graph_modif_request = std::make_shared<aut_msgs::srv::GraphModif::Request>();
+      //   graph_modif_request->position_2.x = select_global_path[i](0, 3);
+      //   graph_modif_request->position_2.y = select_global_path[i](1, 3);
+      //   graph_modif_request->position_2.z = select_global_path[i](2, 3);
+
+      //   graph_modif_request->position_1.x = select_global_path[i - 1](0, 3);
+      //   graph_modif_request->position_1.y = select_global_path[i - 1](1, 3);
+      //   graph_modif_request->position_1.z = select_global_path[i - 1](2, 3);
+
+      //   auto graph_modif_result = graph_modif_client_->async_send_request(graph_modif_request);
+      //   path_is_set_ = false;
+      //   {
+      //     std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
+      //     global_path_poses_.clear();
+      //     closest_pose_it_ = global_path_poses_.end();
+      //     last_target_idx_ = -1;
+      //     count_of_failed = 0;
+      //   }
+      // }
     } else {
       aut_msgs::msg::SpeedCommand speed_command;
-      int look_idx = std::min(15, static_cast<int>(local_path.size() - 1));
-      float angle = std::atan2(local_path[look_idx](1), local_path[look_idx](0));
-      RCLCPP_INFO(this->get_logger(), "Angle : %f", angle);
-      if (std::abs(angle) <= 20 * M_PI / 180.0f) {
-        RCLCPP_INFO(this->get_logger(), "Go forward");
-        float k = 2 * local_path[look_idx](1) / local_path[look_idx].squaredNorm();
-        // float a_k = std::abs(k);
-        // float v_xk = 0.4f;
-        // float v_xd = 0.4f;
-        // if (a_k > 1 / 0.5) {
-        //   v_xk = std::max(0.2, 0.4 / (0.5 * 1 / a_k));
-        // }
-        // float d = local_grid_msg->local_grid[static_cast<int>(local_path[look_idx](0) / 0.03f) + 128 * static_cast<int>(local_path[look_idx](1) / 0.03f)];
-        // if (d <= 0.55) {
-        //   v_xd = std::max(0.2, 0.4f * (d - 0.25) / (0.55f - 0.25f));
-        // }
-        // speed_command.v_x = std::min(v_xk, v_xd);
-        speed_command.v_x = 0.2;
-        speed_command.v_t = speed_command.v_x * k;
-      } else if (std::abs(angle) <= M_PI / 2.0f) {
-        RCLCPP_INFO(this->get_logger(), "Rotate");
-        speed_command.v_t = angle > 0 ? 0.2 : -0.2;
+
+      int look_idx = std::min(10, static_cast<int>(local_path.size() - 1));
+      Eigen::Vector2f target_point = local_path[look_idx];
+      int current_idx = static_cast<int>(local_path[0](0) / 0.03f) + 128 * static_cast<int>(local_path[0](1) / 0.03f);
+      float angle = std::atan2(target_point(1), target_point(0));
+
+      bool can_rotate = local_grid_msg->local_grid[current_idx] >= 0.6;
+      bool reverse = std::abs(angle) >= M_PI / 2.0f;
+
+      if (!reverse ) {  // Go forward
+        if (std::abs(angle) <= M_PI / 7.0f) { // Go forward
+          RCLCPP_INFO(this->get_logger(), "\033[1;32m Go forward \033[0m");
+          float k = 2 * target_point(1) / target_point.squaredNorm();
+          if (std::abs(k) * 0.5 > 0.4f) {
+            speed_command.v_x = 0.4f / std::abs(k);
+            speed_command.v_t = angle > 0 ? 0.4 : -0.4;
+          } else {
+            speed_command.v_x = 0.5f;
+            speed_command.v_t = k * 0.5f;
+          }
+        } else {
+          RCLCPP_INFO(this->get_logger(), "\033[1;32m Rotate to target \033[0m");
+          speed_command.v_t = angle > 0 ? 0.4 : -0.4;
+        }
       } else {
-        RCLCPP_INFO(this->get_logger(), "Reverse");
-        if (local_grid_msg->local_grid[static_cast<int>(local_path[look_idx](0) / 0.03f) + 128 * static_cast<int>(local_path[look_idx](1) / 0.03f)] < 0.55f) {
-          RCLCPP_INFO(this->get_logger(), "-> Stay reversed");
-          Eigen::Vector2f direction = local_path[look_idx];
+        if (can_rotate) {  // Rotate to forward
+          RCLCPP_INFO(this->get_logger(), "\033[1;32m Rotate to be forward \033[0m");
+          speed_command.v_t = angle > 0 ? 0.4 : -0.4;
+        } else { // Stay Backward
+          Eigen::Vector2f direction = target_point;
           Eigen::Affine2f af;
           af.linear() = Eigen::Rotation2Df(M_PI).toRotationMatrix();
           direction = af.inverse() * direction;
-          angle = std::atan2(direction(1), direction(0));
-          if (std::abs(angle) <= 20 * M_PI / 180.0f) {
-            RCLCPP_INFO(this->get_logger(), "-> Continue backward");
-            float k = 2 * local_path[look_idx](1) / local_path[look_idx].squaredNorm();
-            float a_k = std::abs(k);
-            float v_xk = 0.4f;
-            float v_xd = 0.4f;
-            if (a_k > 1 / 0.5) {
-              v_xk = std::max(0.2, 0.4 / (0.5 * 1 / a_k));
+          float new_angle = std::atan2(direction(1), direction(0));
+          if (std::abs(new_angle) <= M_PI / 7.0f) { // Go Backward
+            RCLCPP_INFO(this->get_logger(), "\033[1;32m Go backward \033[0m");
+            float k = 2 * direction(1) / direction.squaredNorm();
+            if (std::abs(k) * 0.5 > 0.4f) {
+              speed_command.v_x = - 0.4f / std::abs(k);
+              speed_command.v_t = new_angle > 0 ? 0.4 : -0.4;
+            } else {
+              speed_command.v_x = - 0.5f;
+              speed_command.v_t = k * 0.5f;
             }
-            float d = local_grid_msg->local_grid[static_cast<int>(local_path[look_idx](0) / 0.03f) + 128 * static_cast<int>(local_path[look_idx](1) / 0.03f)];
-            if (d <= 0.55) {
-              v_xd = std::max(0.2, 0.4f * (d - 0.25) / (0.55f - 0.25f));
-            }
-            speed_command.v_x = -0.2;
-            speed_command.v_t = speed_command.v_x * k;
           } else {
-            RCLCPP_INFO(this->get_logger(), "-> Rotate to backward");
-            speed_command.v_t = angle > 0 ? 0.2 : -0.2;
+            RCLCPP_INFO(this->get_logger(), "\033[1;32m Rotate to backward target \033[0m");
+            speed_command.v_t = new_angle > 0 ? 0.4 : -0.4;
           }
-        } else {
-          RCLCPP_INFO(this->get_logger(), "-> Rotate");
-          speed_command.v_t = angle > 0 ? 0.2 : -0.2;
         }
       }
       speed_command_publisher_->publish(speed_command);
@@ -211,12 +306,182 @@ void LocalPlanner::LocalGridCallBack(
     break;
   }
 
+  // for (auto rit = select_global_path.rbegin(); rit != select_global_path.rend(); ++rit) {
+  //   a_star_.SetGrid(local_grid_msg->local_grid, 
+  //                   aut_utils::InverseTransformation(
+  //                       aut_utils::TransformToMatrix(local_grid_msg->pose)), 
+  //                   current_pose);
+  //   Eigen::Matrix4f pose = *rit;
+  //   bool is_inside = a_star_.InsideGrid(pose);
+  //   if (!a_star_.SetTarget(pose)) { 
+  //     continue; 
+  //   }
+  //   std::vector<Eigen::Vector2f> local_path;
+  //   bool found_path = a_star_.GetPath(local_path);
+  //   if (!found_path) { 
+  //     continue; 
+  //   }
+    
+  //   // Only for occupancy
+  //   std::vector<std::pair<int, int>> path_idx;
+  //   a_star_.FindPath(path_idx);
+  //   for (std::pair<int, int>& p : path_idx) {
+  //     map.data[p.first + 128 * p.second] = 100;
+  //   }
+  //   // --------
+
+  //   if (local_path[local_path.size() - 1].norm() <= 0.15) { // if we are really close to the target we "must" select
+  //     if (rit == select_global_path.rbegin()) {
+  //       RCLCPP_INFO(this->get_logger(), "Goal achieved");
+  //       auto goal_achieved_request = std::make_shared<std_srvs::srv::Trigger::Request>();
+  //       auto goal_achieved_result = goal_achieved_client_->async_send_request(goal_achieved_request);
+  //       path_is_set_ = false;
+  //       {
+  //         std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
+  //         global_path_poses_.clear();
+  //       }
+  //       // Send goal achieved and reset
+  //     } else {
+  //       RCLCPP_INFO(this->get_logger(), "Stuck");
+  //       auto graph_modif_request = std::make_shared<aut_msgs::srv::GraphModif::Request>();
+  //       graph_modif_request->position_2.x = (*rit)(0, 3);
+  //       graph_modif_request->position_2.y = (*rit)(1, 3);
+  //       graph_modif_request->position_2.z = (*rit)(2, 3);
+
+  //       graph_modif_request->position_1.x = (*(rit + 1))(0, 3);
+  //       graph_modif_request->position_1.y = (*(rit + 1))(1, 3);
+  //       graph_modif_request->position_1.z = (*(rit + 1))(2, 3);
+
+  //       auto graph_modif_result = graph_modif_client_->async_send_request(graph_modif_request);
+  //       path_is_set_ = false;
+  //       {
+  //         std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
+  //         global_path_poses_.clear();
+  //       }
+  //     }
+  //   } else {
+  //     aut_msgs::msg::SpeedCommand speed_command;
+
+  //     int look_idx = std::min(10, static_cast<int>(local_path.size() - 1));
+  //     Eigen::Vector2f target_point = local_path[look_idx];
+  //     int target_idx = static_cast<int>(target_point(0) / 0.03f) + 128 * static_cast<int>(target_point(1) / 0.03f);
+  //     float angle = std::atan2(target_point(1), target_point(0));
+
+  //     bool can_rotate = local_grid_msg->local_grid[target_idx] >= 0.7;
+  //     bool reverse = std::abs(angle) >= M_PI / 2.0f;
+
+  //     if (!reverse ) {  // Go forward
+  //       if (std::abs(angle) <= M_PI / 7.0f) { // Go forward
+  //         RCLCPP_INFO(this->get_logger(), "\033[1;32m Go forward \033[0m");
+  //         float k = 2 * target_point(1) / target_point.squaredNorm();
+  //         if (std::abs(k) * 0.5 > 0.4f) {
+  //           speed_command.v_x = 0.4f / std::abs(k);
+  //           speed_command.v_t = angle > 0 ? 0.4 : -0.4;
+  //         } else {
+  //           speed_command.v_x = 0.5f;
+  //           speed_command.v_t = k * 0.5f;
+  //         }
+  //       } else {
+  //         RCLCPP_INFO(this->get_logger(), "\033[1;32m Rotate to target \033[0m");
+  //         speed_command.v_t = angle > 0 ? 0.4 : -0.4;
+  //       }
+  //     } else {
+  //       if (can_rotate) {  // Rotate to forward
+  //         RCLCPP_INFO(this->get_logger(), "\033[1;32m Rotate to be forward \033[0m");
+  //         speed_command.v_t = angle > 0 ? 0.4 : -0.4;
+  //       } else { // Stay Backward
+  //         Eigen::Vector2f direction = target_point;
+  //         Eigen::Affine2f af;
+  //         af.linear() = Eigen::Rotation2Df(M_PI).toRotationMatrix();
+  //         direction = af.inverse() * direction;
+  //         float new_angle = std::atan2(direction(1), direction(0));
+  //         if (std::abs(new_angle) <= M_PI / 7.0f) { // Go Backward
+  //           RCLCPP_INFO(this->get_logger(), "\033[1;32m Go backward \033[0m");
+  //           float k = 2 * target_point(1) / target_point.squaredNorm();
+  //           if (std::abs(k) * 0.5 > 0.4f) {
+  //             speed_command.v_x = - 0.4f / std::abs(k);
+  //             speed_command.v_t = new_angle > 0 ? 0.4 : -0.4;
+  //           } else {
+  //             speed_command.v_x = - 0.5f;
+  //             speed_command.v_t = k * 0.5f;
+  //           }
+  //         } else {
+  //           RCLCPP_INFO(this->get_logger(), "\033[1;32m Rotate to backward target \033[0m");
+  //           speed_command.v_t = new_angle > 0 ? 0.4 : -0.4;
+  //         }
+  //       }
+  //     }
+
+  //     speed_command_publisher_->publish(speed_command);
+  //     // aut_msgs::msg::SpeedCommand speed_command;
+  //     // int look_idx = std::min(15, static_cast<int>(local_path.size() - 1));
+  //     // float angle = std::atan2(local_path[look_idx](1), local_path[look_idx](0));
+  //     // RCLCPP_INFO(this->get_logger(), "Angle : %f", angle);
+  //     // if (std::abs(angle) <= 20 * M_PI / 180.0f) {
+  //     //   RCLCPP_INFO(this->get_logger(), "Go forward");
+  //     //   float k = 2 * local_path[look_idx](1) / local_path[look_idx].squaredNorm();
+  //     //   // float a_k = std::abs(k);
+  //     //   // float v_xk = 0.4f;
+  //     //   // float v_xd = 0.4f;
+  //     //   // if (a_k > 1 / 0.5) {
+  //     //   //   v_xk = std::max(0.2, 0.4 / (0.5 * 1 / a_k));
+  //     //   // }
+  //     //   // float d = local_grid_msg->local_grid[static_cast<int>(local_path[look_idx](0) / 0.03f) + 128 * static_cast<int>(local_path[look_idx](1) / 0.03f)];
+  //     //   // if (d <= 0.55) {
+  //     //   //   v_xd = std::max(0.2, 0.4f * (d - 0.25) / (0.55f - 0.25f));
+  //     //   // }
+  //     //   // speed_command.v_x = std::min(v_xk, v_xd);
+  //     //   speed_command.v_x = 0.2;
+  //     //   speed_command.v_t = speed_command.v_x * k;
+  //     // } else if (std::abs(angle) <= M_PI / 2.0f) {
+  //     //   RCLCPP_INFO(this->get_logger(), "Rotate");
+  //     //   speed_command.v_t = angle > 0 ? 0.2 : -0.2;
+  //     // } else {
+  //     //   RCLCPP_INFO(this->get_logger(), "Reverse");
+  //     //   if (local_grid_msg->local_grid[static_cast<int>(local_path[look_idx](0) / 0.03f) + 128 * static_cast<int>(local_path[look_idx](1) / 0.03f)] < 0.55f) {
+  //     //     RCLCPP_INFO(this->get_logger(), "-> Stay reversed");
+  //     //     Eigen::Vector2f direction = local_path[look_idx];
+  //     //     Eigen::Affine2f af;
+  //     //     af.linear() = Eigen::Rotation2Df(M_PI).toRotationMatrix();
+  //     //     direction = af.inverse() * direction;
+  //     //     angle = std::atan2(direction(1), direction(0));
+  //     //     if (std::abs(angle) <= 20 * M_PI / 180.0f) {
+  //     //       RCLCPP_INFO(this->get_logger(), "-> Continue backward");
+  //     //       float k = 2 * local_path[look_idx](1) / local_path[look_idx].squaredNorm();
+  //     //       float a_k = std::abs(k);
+  //     //       float v_xk = 0.4f;
+  //     //       float v_xd = 0.4f;
+  //     //       if (a_k > 1 / 0.5) {
+  //     //         v_xk = std::max(0.2, 0.4 / (0.5 * 1 / a_k));
+  //     //       }
+  //     //       float d = local_grid_msg->local_grid[static_cast<int>(local_path[look_idx](0) / 0.03f) + 128 * static_cast<int>(local_path[look_idx](1) / 0.03f)];
+  //     //       if (d <= 0.55) {
+  //     //         v_xd = std::max(0.2, 0.4f * (d - 0.25) / (0.55f - 0.25f));
+  //     //       }
+  //     //       speed_command.v_x = -0.2;
+  //     //       speed_command.v_t = speed_command.v_x * k;
+  //     //     } else {
+  //     //       RCLCPP_INFO(this->get_logger(), "-> Rotate to backward");
+  //     //       speed_command.v_t = angle > 0 ? 0.2 : -0.2;
+  //     //     }
+  //     //   } else {
+  //     //     RCLCPP_INFO(this->get_logger(), "-> Rotate");
+  //     //     speed_command.v_t = angle > 0 ? 0.2 : -0.2;
+  //     //   }
+  //     // }
+  //     // speed_command_publisher_->publish(speed_command);
+  //   }
+  //   // aut_msgs::msg::SpeedCommand command = GetSpeedCommand(local_path);
+  //   break;
+  // }
+
 
 
   occupancy_grid_publisher_->publish(map);
 }
 
 aut_msgs::msg::SpeedCommand LocalPlanner::GetSpeedCommand(std::vector<Eigen::Vector2f>& local_path) {
+  (void)local_path;
   return aut_msgs::msg::SpeedCommand();
 }
 
@@ -227,6 +492,8 @@ void LocalPlanner::SetGlobalPathService(
   {
     std::lock_guard<std::mutex> global_path_lock(global_path_mtx_);
     global_path_poses_.clear();
+    last_target_idx_ = -1;
+    count_of_failed = 0;
     for (const geometry_msgs::msg::PoseStamped& pose_stamped : request->global_path.poses) {
       Eigen::Vector3f t_pose(pose_stamped.pose.position.x, 
                             pose_stamped.pose.position.y, 
@@ -239,6 +506,7 @@ void LocalPlanner::SetGlobalPathService(
       m_pose.block<3, 1>(0, 3) = t_pose;
       m_pose.block<3, 3>(0, 0) = q_pose.toRotationMatrix();
       global_path_poses_.push_back(m_pose);
+      closest_pose_it_ = global_path_poses_.end();
     }
     if (!global_path_poses_.empty()) { path_is_set_ = true; }
   }

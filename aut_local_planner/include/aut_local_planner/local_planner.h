@@ -43,6 +43,10 @@ class LocalPlanner : public rclcpp::Node {
   // State
   std::atomic_bool path_is_set_;
   std::vector<Eigen::Matrix4f> global_path_poses_;
+  int count_of_failed;
+  int last_target_idx_;
+
+  std::vector<Eigen::Matrix4f>::iterator closest_pose_it_;
 
   // A*
   AStar a_star_;

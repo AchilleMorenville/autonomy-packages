@@ -21,6 +21,7 @@ class AStar {
   bool SetTarget(const Eigen::Matrix4f& map_to_target);
   bool GetPath(std::vector<Eigen::Vector2f>& path);
   bool FindPath(std::vector<std::pair<int, int>>& path);
+  bool InsideGrid(const Eigen::Matrix4f& map_to_target);
 
  private:
 
